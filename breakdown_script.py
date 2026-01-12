@@ -53,8 +53,14 @@ def create_breakdown_final():
         return
 
     # 3. Calculate Timing (Middle of Shot)
-    first_frame = int(nuke.root()['first_frame'].value())
-    last_frame = int(nuke.root()['last_frame'].value())
+    try:
+        first_frame = int(nuke.root()['first_frame'].value())
+        last_frame = int(nuke.root()['last_frame'].value())
+    except:
+        # Fallback if root knobs fail
+        first_frame = 1001
+        last_frame = 1050
+
     middle_frame = int((first_frame + last_frame) / 2)
 
     # Breakdown Params
@@ -142,6 +148,9 @@ def create_breakdown_final():
     k_switch = master_switch['which']
     k_switch.setAnimated()
 
+    # Ensure start is 0
+    k_switch.setValueAt(0, first_frame)
+
     # Hold 0 (Live) until just before middle
     k_switch.setValueAt(0, middle_frame - 1)
 
@@ -154,13 +163,16 @@ def create_breakdown_final():
     # Switch to 2 (Resume) at end_bd
     k_switch.setValueAt(2, end_bd_frame)
 
+    # Debug print
+    print(f"Switch Keyframes: 0 @ {first_frame}-{middle_frame-1}, 1 @ {middle_frame}-{end_bd_frame-1}, 2 @ {end_bd_frame}+")
+
     # 5. Configure Gizmo Knobs
     try:
         k = bd_maker
 
-        # Enable "Play Output First" logic - set to 0 because we handle pre-play externally now
+        # Enable "Play Output First" logic - set to False
         if 'playbeforebreakdown' in k.knobs():
-            k['playbeforebreakdown'].setValue(0)
+            k['playbeforebreakdown'].setValue(False)
 
         # Start breakdown at the middle of the shot
         if 'start' in k.knobs():
@@ -172,13 +184,13 @@ def create_breakdown_final():
 
         # Enable Hold logic
         if 'hold' in k.knobs():
-            k['hold'].setValue(1)
+            k['hold'].setValue(True)
         if 'holdingframe' in k.knobs():
             k['holdingframe'].setValue(hold_frames)
 
         # Disable loop
         if 'loop' in k.knobs():
-            k['loop'].setValue(0)
+            k['loop'].setValue(False)
 
         # Force update input count
         if 'amountofinputs' in k.knobs():
