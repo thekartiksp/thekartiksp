@@ -224,4 +224,5 @@ def create_breakdown_final():
         nuke.message(f"Breakdown Created!\n\nStart Frame: {middle_frame}\nEnd Frame Needed: {end_frame_needed}\n\n*Important*: Ensure your Project Settings 'frame range' covers up to frame {end_frame_needed} to see the full result.")
 
 # Run
-create_breakdown_final()
+if __name__ == "__main__":
+    create_breakdown_final()
