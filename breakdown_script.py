@@ -136,11 +136,23 @@ def create_breakdown_final():
     master_switch.setInput(1, bd_maker)      # 1: Breakdown Gizmo
     master_switch.setInput(2, resume_offset) # 2: Resume Live
 
-    # Set Expression for Switching
-    # If frame < middle: Use 0
-    # If frame < end_bd: Use 1
-    # Else: Use 2
-    master_switch['which'].setExpression(f"frame < {middle_frame} ? 0 : (frame < {end_bd_frame} ? 1 : 2)")
+    # Keyframe the Switch for precise timing
+    # 0 -> 1 at middle_frame
+    # 1 -> 2 at end_bd_frame
+    k_switch = master_switch['which']
+    k_switch.setAnimated()
+
+    # Hold 0 (Live) until just before middle
+    k_switch.setValueAt(0, middle_frame - 1)
+
+    # Switch to 1 (Breakdown) at middle
+    k_switch.setValueAt(1, middle_frame)
+
+    # Hold 1 (Breakdown) until just before end_bd
+    k_switch.setValueAt(1, end_bd_frame - 1)
+
+    # Switch to 2 (Resume) at end_bd
+    k_switch.setValueAt(2, end_bd_frame)
 
     # 5. Configure Gizmo Knobs
     try:
