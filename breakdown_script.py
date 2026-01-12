@@ -61,13 +61,12 @@ def create_breakdown_final():
     hold_frames = 10
     wipe_duration = 15
 
-    # Calculate Total Length
+    # Calculate Total Length of Breakdown Sequence
     # 4 transitions (Final->Scan, Scan->Key, Key->BG, BG->Final)
-    # The breakdown adds extra duration.
-    # Original Duration: last_frame - first_frame + 1
-    # We pause at middle_frame for 'total_bd_len'.
-    # So New End Frame = last_frame + total_bd_len
     total_bd_len = (wipe_duration + hold_frames) * 4
+    end_bd_frame = middle_frame + total_bd_len
+
+    # New Project End Frame
     end_frame_needed = last_frame + total_bd_len
 
     # 4. Create Breakdown Setup
@@ -82,64 +81,74 @@ def create_breakdown_final():
 
     # Helper to create FrameHold
     def create_hold(input_node, hold_at, label):
-        # Fix: using 'first_frame' knob name instead of 'firstFrame' which is Tcl name
         hold = nuke.nodes.FrameHold(first_frame=hold_at, name=f"Hold_{label}")
         hold.setInput(0, input_node)
         hold.setXYpos(bd_maker.xpos() + (len(inputs_map)*100), bd_maker.ypos() - 150)
         return hold
 
-    # --- CONNECT INPUTS ---
+    # --- PREPARE INPUTS FOR GIZMO (ALL FROZEN) ---
 
-    # Input 0: Final Comp (Live playback UNTIL middle frame, then PAUSE)
-    # We create a Switch that goes from Live (Input 0) to Frozen (Input 1) at middle_frame.
+    # Frozen Final (Used for Input 0 and Input 4)
     hold_final = create_hold(node_final, middle_frame, "Final_Base")
     inputs_map.append(hold_final)
 
-    switch_final = nuke.nodes.Switch(name="Smart_Base_Switch")
-    switch_final.setInput(0, node_final) # Live
-    switch_final.setInput(1, hold_final) # Frozen
-    switch_final.setXYpos(bd_maker.xpos() - 100, bd_maker.ypos() - 150)
+    # Input 0: Final Comp (Frozen)
+    bd_maker.setInput(0, hold_final)
 
-    # Switch at middle_frame: Before = 0, At/After = 1
-    switch_final['which'].setExpression(f"frame < {middle_frame} ? 0 : 1")
-
-    bd_maker.setInput(0, switch_final)
-
-    # Input 1: Scan (FROZEN at middle frame)
+    # Input 1: Scan (Frozen)
     if node_plate:
         h_plate = create_hold(node_plate, middle_frame, "Plate")
         bd_maker.setInput(1, h_plate)
         inputs_map.append(h_plate)
 
-    # Input 2: Key (FROZEN at middle frame)
+    # Input 2: Key (Frozen)
     if node_key:
         h_key = create_hold(node_key, middle_frame, "Key")
         bd_maker.setInput(2, h_key)
         inputs_map.append(h_key)
 
-    # Input 3: BG (FROZEN at middle frame)
+    # Input 3: BG (Frozen)
     if node_bg:
         h_bg = create_hold(node_bg, middle_frame, "BG")
         bd_maker.setInput(3, h_bg)
         inputs_map.append(h_bg)
 
-    # Input 4: Final Comp (Resume playback after breakdown)
-    # We use TimeOffset to shift the live footage so it continues from middle_frame
-    # after the breakdown duration.
+    # Input 4: Final Comp (Frozen - to loop back to start visual)
+    bd_maker.setInput(4, hold_final)
+
+    # --- MASTER SWITCH LOGIC ---
+    # We use a Master Switch to control the flow:
+    # Phase 1: Live Final (until middle_frame)
+    # Phase 2: Breakdown Gizmo (middle_frame to end_bd_frame)
+    # Phase 3: Resume Final (after end_bd_frame)
+
+    # Create Resume Offset Node (Phase 3)
     resume_offset = nuke.nodes.TimeOffset(time_offset=total_bd_len, name="Resume_Offset")
     resume_offset.setInput(0, node_final)
-    resume_offset.setXYpos(bd_maker.xpos() + 500, bd_maker.ypos() - 150)
-    inputs_map.append(resume_offset)
+    resume_offset.setXYpos(bd_maker.xpos() + 500, bd_maker.ypos() + 50)
 
-    bd_maker.setInput(4, resume_offset)
+    # Create Master Switch
+    master_switch = nuke.nodes.Switch(name="Master_Breakdown_Switch")
+    master_switch.setXYpos(bd_maker.xpos(), bd_maker.ypos() + 100)
 
-    # 5. Configure Gizmo Knobs (Logic Fixes)
+    # Connect Inputs to Master Switch
+    master_switch.setInput(0, node_final)    # 0: Live Original
+    master_switch.setInput(1, bd_maker)      # 1: Breakdown Gizmo
+    master_switch.setInput(2, resume_offset) # 2: Resume Live
+
+    # Set Expression for Switching
+    # If frame < middle: Use 0
+    # If frame < end_bd: Use 1
+    # Else: Use 2
+    master_switch['which'].setExpression(f"frame < {middle_frame} ? 0 : (frame < {end_bd_frame} ? 1 : 2)")
+
+    # 5. Configure Gizmo Knobs
     try:
         k = bd_maker
 
-        # Enable "Play Output First" logic
+        # Enable "Play Output First" logic - set to 0 because we handle pre-play externally now
         if 'playbeforebreakdown' in k.knobs():
-            k['playbeforebreakdown'].setValue(1)
+            k['playbeforebreakdown'].setValue(0)
 
         # Start breakdown at the middle of the shot
         if 'start' in k.knobs():
@@ -155,11 +164,11 @@ def create_breakdown_final():
         if 'holdingframe' in k.knobs():
             k['holdingframe'].setValue(hold_frames)
 
-        # Disable loop so it resumes/stops at end
+        # Disable loop
         if 'loop' in k.knobs():
             k['loop'].setValue(0)
 
-        # Force update input count (Crucial for "playing just 1 input" bug)
+        # Force update input count
         if 'amountofinputs' in k.knobs():
             k['amountofinputs'].setValue(5)
 
@@ -169,11 +178,12 @@ def create_breakdown_final():
     # 6. Polish / Cleanup
     for n in inputs_map:
         nuke.autoplace(n)
-    nuke.autoplace(switch_final)
+    nuke.autoplace(resume_offset)
+    nuke.autoplace(master_switch)
     nuke.autoplace(bd_maker)
 
     # Add backdrop
-    bd = nuke.nodes.BackdropNode(xpos=bd_maker.xpos()-50, ypos=bd_maker.ypos()-200, bdwidth=800, bdheight=400, label="Breakdown Gen", note_font_size=20)
+    bd = nuke.nodes.BackdropNode(xpos=bd_maker.xpos()-50, ypos=bd_maker.ypos()-200, bdwidth=800, bdheight=500, label="Breakdown Gen", note_font_size=20)
 
     # 7. Write Node & Render Prompt
     if nuke.ask("Ready for render?"):
@@ -182,8 +192,8 @@ def create_breakdown_final():
 
         # Create Write Node
         write_node = nuke.createNode("Write", "name Write_Breakdown")
-        write_node.setXYpos(bd_maker.xpos(), bd_maker.ypos() + 150)
-        write_node.setInput(0, bd_maker)
+        write_node.setXYpos(master_switch.xpos(), master_switch.ypos() + 150)
+        write_node.setInput(0, master_switch)
 
         # Determine Path
         base_path = "Y:/PROJECT/SPDP/production/Breakdowns"
