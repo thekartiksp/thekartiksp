@@ -142,6 +142,9 @@
     }
     select:focus, input:focus { border-color: var(--accent-orange); box-shadow: 0 0 0 2px rgba(250, 148, 0, 0.2); }
 
+    /* Fix for dropdown options readability */
+    select option { background-color: #1e1e1e; color: white; }
+
     /* --- DASHBOARD CARDS --- */
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; }
     @media (min-width: 600px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } }
