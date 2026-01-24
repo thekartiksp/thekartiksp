@@ -176,7 +176,7 @@
         transform: translateY(-4px) scale(1.02);
         box-shadow: 0 10px 20px rgba(0,0,0,0.4);
     }
-    .dash-title { font-size: 13px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.5px; z-index: 2; }
+    .dash-title { font-size: 16px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.5px; z-index: 2; }
     .dash-value { font-size: 38px; font-weight: 700; line-height: 1; z-index: 2; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
 
     /* --- TOOLBAR --- */
@@ -322,7 +322,13 @@
     @media (max-width: 1400px) { .board-grid-container { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     @media (max-width: 1100px) { .board-grid-container { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 800px)  { .board-grid-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 500px)  { .board-grid-container { grid-template-columns: repeat(1, minmax(0, 1fr)); } }
+    @media (max-width: 500px)  {
+        .board-grid-container {
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+            grid-auto-rows: auto; /* Auto height for mobile flow */
+            gap: 15px;
+        }
+    }
 
     .board-card {
         background-color: rgba(20, 20, 20, 0.85);
@@ -393,6 +399,16 @@
     .expanded-content { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 40px; }
     .expanded-img { max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: 0 0 50px rgba(0,0,0,0.8); animation: fadeIn 0.5s ease-out; transform: scale(1); }
     .expanded-footer { background: rgba(20,20,20,0.8); border-top: 1px solid var(--glass-border); padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; backdrop-filter: blur(20px); }
+
+    @media (max-width: 768px) {
+        .expanded-header { padding: 12px 16px; }
+        .expanded-content { padding: 0; }
+        .expanded-footer { padding: 12px 16px; flex-direction: column; gap: 6px; text-align: center; }
+        .expanded-footer .text-white { font-size: 11px; text-align: center; }
+        .expanded-footer .text-gray-500 { display: none; } /* Hide "Press ESC" on mobile */
+        .expanded-img { max-height: 80vh; width: 100%; object-fit: contain; border-radius: 0; box-shadow: none; }
+        .expanded-header .text-2xl { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80vw; }
+    }
 
     /* Toggle Btn */
     .view-toggle-btn {
@@ -475,13 +491,39 @@
 
         // 1. EXPANDED VIEWER COMPONENT
         const ExpandedViewer = ({ isOpen, onClose, shotName, imageSrc, metadata }) => {
-            if (!isOpen) return null;
 
             React.useEffect(() => {
+                if (!isOpen) return;
                 const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
                 window.addEventListener('keydown', handleEsc);
                 return () => window.removeEventListener('keydown', handleEsc);
-            }, [onClose]);
+            }, [isOpen, onClose]);
+
+            // History API handling for Back Button (Mobile)
+            React.useEffect(() => {
+                if (isOpen) {
+                    // Push state so back button closes modal instead of app
+                    const state = { modal: 'expanded' };
+                    window.history.pushState(state, '');
+
+                    const handlePopState = (e) => {
+                        // User pressed Back -> Close modal
+                        onClose();
+                    };
+
+                    window.addEventListener('popstate', handlePopState);
+
+                    return () => {
+                        window.removeEventListener('popstate', handlePopState);
+                        // If closing via UI (X or overlay), manually pop the history state we added
+                        if (window.history.state && window.history.state.modal === 'expanded') {
+                            window.history.back();
+                        }
+                    };
+                }
+            }, [isOpen, onClose]);
+
+            if (!isOpen) return null;
 
             return (
                 <div className="expanded-overlay" onClick={onClose}>
