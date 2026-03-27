@@ -1,0 +1,1609 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+<head> 
+    <link rel="manifest" href="manifest.json"> 
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> 
+    <title>ShotPilot Cloud (Viewer)</title> 
+     
+    <meta name="apple-mobile-web-app-capable" content="yes"> 
+    <meta name="mobile-web-app-capable" content="yes"> 
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"> 
+    <meta name="theme-color" content="#000000"> 
+ 
+    <link rel="icon" type="image/png" href="SP_Logo.png"> 
+    <link rel="apple-touch-icon" href="SP_Logo.png"> 
+    <link rel="shortcut icon" href="SP_Logo.png"> 
+ 
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script> 
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script> 
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script> 
+    <script src="https://cdn.tailwindcss.com"></script> 
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script> 
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script> 
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script> 
+ 
+    <style> 
+    /* --- APPLE LIQUID GLASS THEME --- */ 
+    :root {
+        --glass-bg: rgba(30, 30, 30, 0.65);
+        --glass-border: rgba(255, 255, 255, 0.12);
+        --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        --accent-orange: #fa9400;
+        --accent-glow: rgba(250, 148, 0, 0.4);
+        --text-primary: #f5f5f7;
+        --text-secondary: #a1a1a6;
+        --bg-deep: #000000;
+        --radius-lg: 18px;
+        --radius-md: 12px;
+        --radius-sm: 8px;
+    }
+
+    body { 
+        background-color: var(--bg-deep); 
+        background-image: radial-gradient(circle at 50% 0%, #1a1a1a 0%, #000000 100%);
+        color: var(--text-primary); 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+        font-size: 13px; 
+        margin: 0; 
+        padding: 0; 
+        -webkit-font-smoothing: antialiased;
+    } 
+
+    html, body, #root { height: 100dvh; overflow: hidden; } 
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+    .app-container { 
+        display: flex; 
+        flex-direction: column; 
+        height: 100%; 
+        position: relative; 
+        max-width: 100vw; 
+        backdrop-filter: blur(0px); /* Base for child filters */
+    } 
+
+    /* Glass Panels */
+    .glass-panel {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow);
+    }
+
+    /* Animations */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes pulseGlow { 0% { box-shadow: 0 0 5px var(--accent-glow); } 50% { box-shadow: 0 0 15px var(--accent-glow); } 100% { box-shadow: 0 0 5px var(--accent-glow); } }
+
+    /* Layout */
+    .workspace-split { display: flex; flex: 1; min-height: 0; overflow: hidden; gap: 10px; padding: 0 10px 10px 10px; } 
+    .table-panel { 
+        flex: 1; 
+        min-width: 0; 
+        display: flex; 
+        flex-direction: column; 
+        border-radius: var(--radius-lg); 
+        overflow: hidden; 
+        background: rgba(30,30,30,0.4);
+        border: 1px solid var(--glass-border);
+        animation: fadeIn 0.5s ease-out;
+    } 
+    .details-panel { 
+        width: 350px; 
+        flex-shrink: 0; 
+        background-color: rgba(30, 30, 30, 0.6); 
+        backdrop-filter: blur(30px);
+        -webkit-backdrop-filter: blur(30px);
+        display: flex; 
+        flex-direction: column; 
+        border: 1px solid var(--glass-border); 
+        border-radius: var(--radius-lg);
+        overflow-y: auto; 
+        margin-left: 0;
+        animation: slideUp 0.6s ease-out;
+    } 
+ 
+    /* Mobile Responsive */ 
+    @media (max-width: 768px) { 
+        .workspace-split { flex-direction: column; padding: 5px; } 
+        .details-panel { width: 100%; height: 40%; border-left: none; margin-top: 10px; } 
+        .table-panel { height: 60%; } 
+    } 
+
+    .table-wrapper { flex: 1; min-height: 0; overflow: auto; position: relative; border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+    
+    @media (max-width: 768px), (max-height: 600px) { 
+        html, body, #root { height: auto !important; overflow-y: auto !important; overflow-x: hidden; } 
+        .app-container { display: block; height: auto !important; padding-bottom: 20px; } 
+        .table-wrapper { flex: none; height: 500px; min-height: 50vh; } 
+        .dash-card { height: 90px !important; } 
+        .dash-value { font-size: 30px !important; } 
+        .dash-title { font-size: 14px !important; } 
+        .header-container { padding: 10px !important; } 
+    } 
+     
+    select, input { 
+        background-color: rgba(0,0,0,0.3); 
+        border: 1px solid var(--glass-border); 
+        color: #fff; 
+        padding: 8px 12px; 
+        font-size: 13px; 
+        outline: none; 
+        border-radius: var(--radius-sm); 
+        transition: all 0.2s; 
+        width: 100%; 
+        backdrop-filter: blur(5px);
+    } 
+    select:focus, input:focus { border-color: var(--accent-orange); box-shadow: 0 0 0 2px rgba(250, 148, 0, 0.2); } 
+    
+    /* Fix for dropdown options readability */
+    select option { background-color: #1e1e1e; color: white; }
+
+    /* --- DASHBOARD CARDS --- */ 
+    .dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; } 
+    @media (min-width: 600px) { .dashboard-grid { grid-template-columns: repeat(4, 1fr); } } 
+    @media (min-width: 1024px) { .dashboard-grid { grid-template-columns: repeat(8, 1fr); } } 
+ 
+    .dash-card { 
+        background: rgba(40, 40, 40, 0.4);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        border: 1px solid var(--glass-border); 
+        border-radius: var(--radius-md); 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center; 
+        height: 90px; 
+        cursor: pointer; 
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
+        position: relative; 
+        overflow: hidden;
+    } 
+    .dash-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; 
+        background: linear-gradient(90deg, transparent, currentColor, transparent); opacity: 0.7;
+    }
+    .dash-card:hover { 
+        background: rgba(60, 60, 60, 0.5); 
+        border-color: rgba(255,255,255,0.3); 
+        transform: translateY(-4px) scale(1.02); 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+    } 
+    .dash-title { font-size: 13px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.5px; z-index: 2; } 
+    .dash-value { font-size: 38px; font-weight: 700; line-height: 1; z-index: 2; text-shadow: 0 2px 10px rgba(0,0,0,0.5); } 
+ 
+    /* --- TOOLBAR --- */ 
+    .toolbar-container { 
+        display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px; 
+        background: rgba(40,40,40,0.3); border: 1px solid var(--glass-border); 
+        backdrop-filter: blur(10px);
+        border-radius: var(--radius-md); margin-bottom: 12px; flex-shrink: 0; 
+        position: relative; z-index: 50;
+    } 
+    .toolbar-item { flex: 0 0 auto; width: 140px; } 
+    .toolbar-item.search-box { flex: 1 1 auto; min-width: 140px; max-width: 300px; } 
+    @media (max-width: 640px) { .toolbar-item { width: 48%; } .toolbar-item.search-box { width: 100%; max-width: 100%; order: -1; margin-bottom: 5px; } } 
+ 
+    /* --- TABLE --- */ 
+    table { width: 100%; border-collapse: separate; border-spacing: 0; } 
+    thead { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(20px); background: rgba(30,30,30,0.8); } 
+    th { 
+        padding: 12px 10px; text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 11px; 
+        text-transform: uppercase; border-bottom: 1px solid var(--glass-border); cursor: pointer; white-space: nowrap; 
+        transition: color 0.2s;
+    } 
+    th:hover { color: #fff; background: rgba(255,255,255,0.05); } 
+    td { padding: 0; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; height: 36px; white-space: nowrap; transition: background 0.2s; } 
+    
+    tr.shot-row td { border-right: 1px solid transparent; }
+    tr.shot-row:hover td { background-color: rgba(255, 255, 255, 0.08); } 
+    tr.shot-row.selected td { background-color: rgba(11, 81, 222, 0.3) !important; border-bottom-color: rgba(11, 81, 222, 0.5); } 
+ 
+    /* Colors & Status Pills */ 
+    .status-cell {
+        display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; font-weight: 700; font-size: 11px; color: white;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.4); box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+    }
+    .bg-Approved { background: linear-gradient(135deg, #0ba12c, #087520) !important; } 
+    .bg-Review { background: linear-gradient(135deg, #81d4fa, #29b6f6) !important; color: #000 !important; text-shadow: none; } 
+    .bg-KBK, .bg-Kickback { background: linear-gradient(135deg, #722525, #4a1818) !important; } 
+    .bg-Correction { background: linear-gradient(135deg, #c25b5b, #a53b3b) !important; } 
+    .bg-InProgress { background: linear-gradient(135deg, #c98014, #a06510) !important; } 
+    .bg-AWFB, .bg-AwaitFB { background: linear-gradient(135deg, #f7671a, #d84315) !important; color: #000 !important; text-shadow: none; } 
+    .bg-NTS { background: linear-gradient(135deg, #6030ad, #45227c) !important; } 
+    .bg-Hold { background: linear-gradient(135deg, #c5885f, #8d6141) !important; } 
+    .bg-Unattended { color: #666 !important; font-weight: normal; } 
+    .bg-Completed { background: linear-gradient(135deg, #478f4a, #2e7d32) !important; } 
+    .bg-Omit { background: linear-gradient(135deg, #e31414, #b71c1c) !important; } 
+    .bg-PullBack { background: linear-gradient(135deg, #8187A8, #5c6bc0) !important; } 
+ 
+    .lbl-pill { 
+        padding: 3px 8px; border-radius: 10px; font-weight: 600; font-size: 10px; display: inline-block; width: 90%; text-align: center; color: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2); backdrop-filter: blur(4px);
+    } 
+ 
+    /* Header & Indicators */ 
+    .header-container { padding: 16px 20px !important; backdrop-filter: blur(20px); background: rgba(20,20,20,0.7); border-bottom: 1px solid var(--glass-border); z-index: 20; }
+    .header-title-row { display: flex; align-items: center; gap: 20px; } 
+    .live-indicator { 
+        display: flex; align-items: center; gap: 10px; padding: 6px 14px; border-radius: 20px; 
+        background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); cursor: default; transition: all 0.3s ease; 
+    } 
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; transition: all 0.3s ease; flex-shrink: 0; } 
+    .is-live { border-color: rgba(11, 161, 44, 0.3); background: rgba(11, 161, 44, 0.1); } 
+    .is-live .live-dot { background-color: #0ba12c; box-shadow: 0 0 8px #0ba12c; } 
+    .is-live .live-text { color: #0ba12c; } 
+    .is-offline { border-color: #444; background: rgba(50,50,50,0.3); } 
+    .is-offline .live-dot { background-color: #666; } 
+    .is-offline .live-text { color: #888; } 
+    .live-text { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; } 
+    .last-synced { font-size: 9px; color: #666; font-style: italic; white-space: nowrap; margin-top: 1px; } 
+ 
+    .duration-box { 
+        background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: var(--radius-md); 
+        padding: 10px 15px; width: 160px; display: flex; flex-direction: column; gap: 4px; 
+    } 
+    .duration-title { color: var(--text-secondary); font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; } 
+    .duration-value { color: white; font-weight: 600; font-size: 14px; } 
+ 
+    /* Tabs & Buttons */ 
+    .tab-bar { display: flex; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--glass-border); padding-top: 10px; padding-left: 20px; gap: 4px; } 
+    .tab { 
+        padding: 10px 24px; background: rgba(255,255,255,0.03); color: var(--text-secondary); font-weight: 600; font-size: 12px; cursor: pointer; 
+        border-radius: 12px 12px 0 0; transition: all 0.2s; border: 1px solid transparent; border-bottom: none;
+    } 
+    .tab:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .tab.active { 
+        background: rgba(255,255,255,0.1); color: #fff; border-color: var(--glass-border); 
+        box-shadow: 0 -4px 10px rgba(0,0,0,0.2); position: relative;
+    } 
+    .tab.active::after { content:''; position: absolute; bottom: 0; left: 0; width: 100%; height: 2px; background: var(--accent-orange); box-shadow: 0 0 10px var(--accent-orange); }
+     
+    .pool-btn { 
+        padding: 8px 24px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); color: var(--text-secondary); 
+        font-weight: 700; font-size: 11px; cursor: pointer; flex: 1; text-align: center; border-radius: 0; 
+        transition: all 0.2s; letter-spacing: 1px;
+    } 
+    .pool-btn:first-child { border-radius: 8px 0 0 8px; } 
+    .pool-btn:last-child { border-radius: 0 8px 8px 0; }
+    .pool-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+    .pool-btn.active { background: rgba(250, 148, 0, 0.15); color: var(--accent-orange); border-color: var(--accent-orange); box-shadow: 0 0 15px rgba(250, 148, 0, 0.1); z-index: 1;} 
+ 
+    .mini-pill { 
+        padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; border-radius: 20px; margin: 0 4px; border: 1px solid; white-space: nowrap; 
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        backdrop-filter: blur(5px);
+    } 
+    .mini-pill:hover { transform: scale(1.08); }
+    .pill-green { background-color: rgba(31, 62, 37, 0.6); border-color: #2e7d32; color: #a5d6a7; } 
+    .pill-red { background-color: rgba(62, 31, 31, 0.6); border-color: #c25b5b; color: #ef9a9a; } 
+ 
+    /* Modals */ 
+    .context-menu { 
+        position: fixed; z-index: 50; width: 180px; background-color: rgba(37, 37, 38, 0.95); backdrop-filter: blur(15px);
+        border: 1px solid var(--glass-border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); border-radius: 12px; padding: 6px; 
+    } 
+    .context-item { padding: 10px 12px; cursor: pointer; color: #ccc; font-size: 13px; display: flex; align-items: center; justify-content: space-between; border-radius: 6px; transition: background 0.1s; } 
+    .context-item:hover { background-color: var(--accent-orange); color: black; font-weight: 600; } 
+ 
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.2s; } 
+    .modal-box { 
+        background: rgba(30, 30, 30, 0.85); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); 
+        width: 700px; max-width: 100%; max-height: 90vh; display: flex; flex-direction: column; 
+        box-shadow: 0 25px 50px rgba(0,0,0,0.6); backdrop-filter: blur(20px); transform: scale(1); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    } 
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); } 
+    .modal-body { padding: 0; overflow-y: auto; flex: 1; } 
+     
+    .loading-overlay { 
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+        z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; font-size: 18px; font-weight: 300; letter-spacing: 1px;
+    } 
+     
+    /* --- BOARD VIEW STYLES --- */ 
+    .board-grid-container { 
+        padding: 20px; 
+        overflow-y: auto; 
+        height: 100%; 
+        display: grid; 
+        grid-template-columns: repeat(6, minmax(0, 1fr));  
+        grid-auto-rows: 320px;  
+        gap: 20px; 
+        align-content: start;  
+    } 
+    @media (max-width: 1600px) { .board-grid-container { grid-template-columns: repeat(5, minmax(0, 1fr)); } } 
+    @media (max-width: 1400px) { .board-grid-container { grid-template-columns: repeat(4, minmax(0, 1fr)); } } 
+    @media (max-width: 1100px) { .board-grid-container { grid-template-columns: repeat(3, minmax(0, 1fr)); } } 
+    @media (max-width: 800px)  { .board-grid-container { grid-template-columns: repeat(2, minmax(0, 1fr)); } } 
+    @media (max-width: 500px)  { .board-grid-container { grid-template-columns: repeat(1, minmax(0, 1fr)); } } 
+ 
+    .board-card { 
+        background-color: rgba(20, 20, 20, 0.85); 
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border); 
+        border-radius: var(--radius-md); 
+        overflow: hidden; 
+        display: flex; 
+        flex-direction: column; 
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
+        cursor: pointer; 
+        height: 100%; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    } 
+    .board-card:hover { 
+        border-color: var(--accent-orange); 
+        transform: translateY(-5px) scale(1.02); 
+        box-shadow: 0 15px 30px rgba(0,0,0,0.3); 
+        z-index: 10;
+    } 
+     
+    .board-card-thumb { 
+        width: 100%; height: 140px; background: #000; display: flex; align-items: center; justify-content: center; 
+        border-bottom: 1px solid var(--glass-border); overflow: hidden; flex-shrink: 0;  
+    } 
+    .board-card-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; } 
+    .board-card:hover .board-card-thumb img { transform: scale(1.1); }
+     
+    .board-card-body { padding: 12px; flex: 1; display: flex; flex-direction: column; min-height: 0; gap: 8px; } 
+    .board-card-title { font-weight: 700; color: white; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 4px rgba(0,0,0,0.5); } 
+    .board-card-seq { font-size: 10px; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; } 
+ 
+    .board-pill-row { display: flex; gap: 6px; margin-bottom: 4px; } 
+    .board-pill { 
+        padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 11px; text-align: center; flex: 1;  
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; justify-content: center; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    } 
+ 
+    .board-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; margin-bottom: 8px; } 
+    .tag-pill { font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); } 
+    .tag-omit { background-color: #e31414; } 
+    .tag-out { background-color: rgba(0,0,0,0.5); border: 1px solid #fa9400; color: #fa9400; } 
+    .tag-in { background-color: rgba(255,255,255,0.1); border: 1px solid #555; color: #aaa; } 
+     
+    .board-footer { 
+        margin-top: auto; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px; 
+        display: flex; align-items: center; justify-content: space-between; color: #888; font-size: 11px; font-weight: bold; 
+    } 
+
+    /* Detail Elements */
+    .detail-header { padding: 15px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--glass-border); font-weight: 700; font-size: 18px; color: var(--accent-orange); text-shadow: 0 0 10px rgba(250, 148, 0, 0.3); } 
+    .detail-thumb { 
+        width: 100%; height: 200px; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; 
+        overflow: hidden; border-bottom: 1px solid var(--glass-border); position: relative;
+    }
+    .detail-thumb::after { content: '🔎 Click to Expand'; position: absolute; bottom: 10px; right: 10px; color: rgba(255,255,255,0.5); font-size: 10px; font-weight: bold; pointer-events: none; }
+    .detail-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; } 
+    .meta-box { padding: 15px; background: transparent; border-bottom: 1px solid var(--glass-border); } 
+    .notes-tabs { display: flex; border-bottom: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); overflow-x: auto; } 
+    .note-tab { padding: 10px 18px; cursor: pointer; color: var(--text-secondary); font-weight: 600; font-size: 12px; border-right: 1px solid rgba(255,255,255,0.05); white-space: nowrap; transition: all 0.2s; } 
+    .note-tab.active { background: rgba(255,255,255,0.05); color: #fff; border-bottom: 2px solid var(--accent-orange); } 
+    .note-content { flex: 1; padding: 15px; font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 12px; color: #ddd; white-space: pre-wrap; overflow-y: auto; background: transparent; line-height: 1.5; } 
+
+    /* Expanded Overlay */
+    .expanded-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(20px); z-index: 9999; display: flex; flex-direction: column; animation: fadeIn 0.3s; } 
+    .expanded-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 30px; background: rgba(20,20,20,0.8); border-bottom: 1px solid var(--glass-border); } 
+    .expanded-content { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 40px; } 
+    .expanded-img { max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: 0 0 50px rgba(0,0,0,0.8); animation: fadeIn 0.5s ease-out; transform: scale(1); } 
+    .expanded-footer { background: rgba(20,20,20,0.8); border-top: 1px solid var(--glass-border); padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; backdrop-filter: blur(20px); } 
+
+    /* Toggle Btn */
+    .view-toggle-btn { 
+        display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; 
+        border: 1px solid var(--glass-border); background: rgba(255,255,255,0.05); color: #888; 
+        border-radius: 8px; cursor: pointer; margin-right: 6px; transition: all 0.2s;
+    } 
+    .view-toggle-btn.active { background: var(--accent-orange); color: #000; border-color: var(--accent-orange); box-shadow: 0 0 10px rgba(250, 148, 0, 0.4); } 
+    .view-toggle-btn:hover:not(.active) { background: rgba(255,255,255,0.1); color: white; }
+
+</style> 
+</head> 
+<body> 
+    <div id="root"></div> 
+ 
+ 
+    <script type="text/babel"> 
+        // --- CONFIGURATION --- 
+        const firebaseConfig = { 
+            apiKey: "AIzaSyDWpZlK3BOMeqi4T_eKBQ47Ib57VbNQChU", 
+            authDomain: "shotpilot-sync.firebaseapp.com", 
+            databaseURL: "https://shotpilot-sync-default-rtdb.asia-southeast1.firebasedatabase.app", 
+            projectId: "shotpilot-sync", 
+            storageBucket: "shotpilot-sync.firebasestorage.app", 
+            messagingSenderId: "517037962868", 
+            appId: "1:517037962868:web:bf9b855dd42870dfadc321" 
+        }; 
+ 
+        const STATUS_OPTIONS = ["Unattended", "In Progress", "Review", "Correction", "KBK", "Hold", "Completed", "NTS", "AWFB", "Approved", "Omit"]; 
+        const DEFAULT_ARTISTS = ["Ritesh", "Kartik", "Rohit", "Raj", "Swarup", "Ashraf", "Gayatri", "Amit", "Vinayak", "Saif"]; 
+        const DONE_STATUSES = ["Completed", "Approved", "NTS", "AWFB"]; 
+        const IGNORE_STATUSES = ["Omit"]; 
+ 
+        // Helper to guess category if missing (mirrors Python) 
+        const guessCategory = (name) => { 
+            const n = (name || "").toLowerCase(); 
+            if (n.includes("ep")) return "EP"; 
+            if (n.includes("reel")) return "REEL"; 
+            if (n.includes("scene")) return "SCENE"; 
+            return "Other"; 
+        }; 
+ 
+        // Reusable Table Component for Summaries 
+        const SummaryTable = ({ headers, rows, totalRow }) => ( 
+            <div className="overflow-x-auto border border-[#444] rounded-lg bg-black/20 backdrop-blur-md"> 
+                <table className="w-full text-xs"> 
+                    <thead> 
+                        <tr className="bg-white/5 text-white"> 
+                            {headers.map((h, i) => <th key={i} className="p-3 border-r border-white/10 text-center whitespace-nowrap">{h}</th>)} 
+                        </tr> 
+                    </thead> 
+                    <tbody> 
+                        {rows.map((row, i) => ( 
+                            <tr key={i} className="hover:bg-white/5 border-b border-white/5 transition-colors"> 
+                                {row.map((cell, j) => ( 
+                                    <td key={j} className={`p-2 border-r border-white/5 text-center ${j===0 ? 'font-bold text-gray-200 text-left pl-4' : 'text-gray-400'}`}> 
+                                        {cell} 
+                                    </td> 
+                                ))} 
+                            </tr> 
+                        ))} 
+                        {totalRow && ( 
+                            <tr className="bg-white/10 font-bold border-t-2 border-white/20"> 
+                                {totalRow.map((cell, i) => ( 
+                                    <td key={i} className="p-3 border-r border-white/10 text-center text-white">{cell}</td> 
+                                ))} 
+                            </tr> 
+                        )} 
+                    </tbody> 
+                </table> 
+            </div> 
+        ); 
+ 
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig); 
+        const db = firebase.database(); 
+        const auth = firebase.auth(); 
+ 
+        const sanitizeKey = (key) => key ? key.replace(/\//g, '_') : key; 
+        const normalizeForMatch = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, "") : ""; 
+ 
+        // 1. EXPANDED VIEWER COMPONENT 
+        const ExpandedViewer = ({ isOpen, onClose, shotName, imageSrc, metadata }) => { 
+            if (!isOpen) return null; 
+             
+            React.useEffect(() => { 
+                const handleEsc = (e) => { if (e.key === 'Escape') onClose(); }; 
+                window.addEventListener('keydown', handleEsc); 
+                return () => window.removeEventListener('keydown', handleEsc); 
+            }, [onClose]); 
+ 
+            return ( 
+                <div className="expanded-overlay" onClick={onClose}> 
+                    <div className="expanded-header" onClick={e => e.stopPropagation()}> 
+                        <div className="text-[#fa9400] font-bold text-2xl tracking-tight">{shotName}</div> 
+                        <button onClick={onClose} className="text-gray-400 hover:text-white font-bold text-2xl transition-colors">✕</button> 
+                    </div> 
+                    <div className="expanded-content" onClick={e => e.stopPropagation()}> 
+                        {imageSrc ? ( 
+                            <img src={imageSrc} className="expanded-img" alt={shotName} /> 
+                        ) : ( 
+                            <div className="text-3xl text-gray-600 font-bold tracking-widest">NO PREVIEW AVAILABLE</div> 
+                        )} 
+                    </div> 
+                    <div className="expanded-footer" onClick={e => e.stopPropagation()}> 
+                        <div className="text-white font-mono text-sm">{metadata || "No metadata"}</div> 
+                        <div className="text-gray-500 text-xs font-bold uppercase tracking-wider">Press ESC to close</div> 
+                    </div> 
+                </div> 
+            ); 
+        }; 
+ 
+        // --- NEW ADMIN PRESENCE COMPONENT --- 
+        const AdminPresencePanel = ({ currentUser }) => { 
+            const [onlineUsers, setOnlineUsers] = React.useState([]); 
+            const [isVisible, setIsVisible] = React.useState(false); 
+ 
+            React.useEffect(() => { 
+                if (!currentUser || currentUser.email !== 'kartik@shotpilot.com') return; 
+                setIsVisible(true); 
+                const ref = firebase.database().ref('status'); 
+                const handleValue = (snap) => { 
+                    const data = snap.val() || {}; 
+                    const list = Object.entries(data).map(([key, val]) => ({ uid: key, ...val })); 
+                    setOnlineUsers(list); 
+                }; 
+                ref.on('value', handleValue); 
+                return () => ref.off('value', handleValue); 
+            }, [currentUser]); 
+ 
+            if (!isVisible) return null; 
+ 
+            return ( 
+                <div style={{ 
+                    position: 'fixed', bottom: 20, right: 20, width: 280, 
+                    background: 'rgba(30,30,30,0.85)', backdropFilter: 'blur(15px)', color: '#e0e0e0', padding: 15, borderRadius: 16, 
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.6)', zIndex: 9999, 
+                    border: '1px solid rgba(255,255,255,0.1)', fontFamily: '-apple-system, sans-serif' 
+                }}> 
+                    <h3 style={{borderBottom:'1px solid rgba(255,255,255,0.1)', paddingBottom:8, margin:'0 0 10px 0', fontWeight:'700', color: '#fa9400', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px'}}> 
+                        Admin: Live Users ({onlineUsers.filter(u => u.state === 'online').length}) 
+                    </h3> 
+                    <ul style={{listStyle:'none', padding:0, margin:0, maxHeight:200, overflowY:'auto'}}> 
+                        {onlineUsers.length === 0 && <li style={{color:'#666', fontSize:12}}>No active history.</li>} 
+                        {onlineUsers.map(u => ( 
+                            <li key={u.uid} style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6, fontSize:12, padding:'6px 8px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px'}}> 
+                                <div style={{display:'flex', alignItems:'center'}}> 
+                                    <span style={{ 
+                                        display:'inline-block', width:8, height:8, borderRadius:'50%', marginRight:8, 
+                                        background: u.state === 'online' ? '#2ecc71' : '#666', 
+                                        boxShadow: u.state === 'online' ? '0 0 8px #2ecc71' : 'none' 
+                                    }}></span> 
+                                    <span style={{fontWeight: u.state === 'online' ? '700' : 'normal', color: u.state === 'online' ? 'white' : '#888'}}> 
+                                        {u.email ? u.email.split('@')[0] : "Anon"} 
+                                    </span> 
+                                </div> 
+                                <span style={{color:'#666', fontSize: 10}}>{u.state}</span> 
+                            </li> 
+                        ))} 
+                    </ul> 
+                </div> 
+            ); 
+        }; 
+ 
+ 
+        // 1. LOGIN COMPONENT 
+        function Login() { 
+            const [email, setEmail] = React.useState(""); 
+            const [pass, setPass] = React.useState(""); 
+            const handleLogin = (e) => { e.preventDefault(); auth.signInWithEmailAndPassword(email, pass).catch(e => alert(e.message)); }; 
+            return ( 
+                <div className="h-full flex items-center justify-center bg-black p-4" style={{backgroundImage: 'radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000 100%)'}}> 
+                    <form onSubmit={handleLogin} className="glass-panel p-10 w-full max-w-sm text-center rounded-2xl"> 
+                        <img src="SP_Logo.png" className="w-16 h-16 mx-auto mb-4 object-contain opacity-80" />
+                        <h1 className="text-2xl font-bold text-white mb-8 tracking-tight">ShotPilot Cloud</h1> 
+                        <input className="w-full mb-4 p-3 bg-white/10 border-white/10 text-white rounded-lg focus:ring-2 ring-orange-500" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} /> 
+                        <input className="w-full mb-8 p-3 bg-white/10 border-white/10 text-white rounded-lg focus:ring-2 ring-orange-500" type="password" placeholder="Password" value={pass} onChange={e=>setPass(e.target.value)} /> 
+                        <button className="w-full bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold p-3 rounded-lg hover:shadow-lg hover:shadow-orange-500/20 transition-all transform hover:-translate-y-1">Log In</button> 
+                    </form> 
+                </div> 
+            ); 
+        } 
+ 
+        // --- MULTI-SELECT COMPONENT --- 
+        function MultiSelect({ label, options, selected, onChange, alignRight = false }) { 
+            const [isOpen, setIsOpen] = React.useState(false); 
+            const containerRef = React.useRef(null); 
+ 
+            React.useEffect(() => { 
+                const handleClickOutside = (event) => { 
+                    if (containerRef.current && !containerRef.current.contains(event.target)) { setIsOpen(false); } 
+                }; 
+                document.addEventListener("mousedown", handleClickOutside); 
+                return () => document.removeEventListener("mousedown", handleClickOutside); 
+            }, []); 
+ 
+            const toggleOption = (opt) => { 
+                const newSelected = selected.includes(opt) ? selected.filter(item => item !== opt) : [...selected, opt]; 
+                onChange(newSelected); 
+            }; 
+ 
+            const handleSelectAll = () => onChange([...options]); 
+            const handleClear = () => onChange([]); 
+ 
+            return ( 
+                <div className="relative w-full" ref={containerRef}> 
+                    <button  
+                        className={`w-full text-left px-3 py-2 text-xs font-bold border rounded-lg flex justify-between items-center transition-all ${selected.length > 0 ? 'bg-white/10 text-[#fa9400] border-[#fa9400]' : 'bg-black/30 text-[#ccc] border-white/10 hover:bg-white/5'}`} 
+                        onClick={() => setIsOpen(!isOpen)} 
+                    > 
+                        <span className="truncate mr-2">{selected.length > 0 ? `${label} (${selected.length})` : label}</span> 
+                        <span className="text-[10px] opacity-70">▼</span> 
+                    </button> 
+ 
+                    {isOpen && ( 
+                        <div className={`absolute top-full mt-2 ${alignRight ? 'right-0' : 'left-0'} w-64 bg-[#1e1e1e] border border-[#444] shadow-2xl rounded-lg z-[100] flex flex-col overflow-hidden backdrop-blur-xl animate-[fadeIn_0.1s]`}> 
+                            <div className="flex items-center justify-between border-b border-[#333] px-3 py-2 bg-white/5"> 
+                                <button onClick={handleSelectAll} className="text-[10px] font-bold text-gray-400 hover:text-white px-2 py-1 rounded transition-colors uppercase">All</button> 
+                                <button onClick={handleClear} className="text-[10px] font-bold text-red-400 hover:text-red-300 px-2 py-1 rounded transition-colors uppercase">Clear</button> 
+                            </div> 
+                            <div className="overflow-y-auto max-h-80 p-1 custom-scrollbar"> 
+                                {options.map(opt => ( 
+                                    <div key={opt} onClick={() => toggleOption(opt)} className="flex items-center justify-start gap-3 px-3 py-2 hover:bg-white/10 cursor-pointer rounded-md text-xs text-gray-300 transition-colors"> 
+                                        <div className={`w-3 h-3 rounded border flex items-center justify-center ${selected.includes(opt) ? 'bg-[#fa9400] border-[#fa9400]' : 'border-gray-600'}`}> 
+                                            {selected.includes(opt) && <div className="w-1.5 h-1.5 bg-black rounded-full"></div>} 
+                                        </div> 
+                                        <span className={`truncate text-left flex-1 ${selected.includes(opt) ? 'text-white font-bold' : ''}`}>{opt}</span> 
+                                    </div> 
+                                ))} 
+                            </div> 
+                        </div> 
+                    )} 
+                </div> 
+            ); 
+        } 
+ 
+        // --- NOTES VIEWER COMPONENT --- 
+        const NotesViewer = ({ notes }) => { 
+            const [activeTab, setActiveTab] = React.useState("Internal"); 
+             
+            const tabs = React.useMemo(() => { 
+                if (!notes) return { "Internal": "No notes." }; 
+                let internal = "", feedback = ""; 
+                 
+                if (notes.includes("[---INTERNAL_NOTES---]")) { 
+                    const parts = notes.split("[---END_INTERNAL_NOTES---]"); 
+                    internal = parts[0].replace("[---INTERNAL_NOTES---]", "").trim(); 
+                    feedback = parts[1] ? parts[1].trim() : ""; 
+                } else { 
+                    feedback = notes.trim(); 
+                } 
+ 
+                const result = { "Internal": internal || "No internal notes." }; 
+                 
+                if (feedback) { 
+                    const versions = feedback.split(/(?=v\d{3})/i); 
+                    versions.forEach(ver => { 
+                        const match = ver.match(/^(v\d{3})/i); 
+                        if (match) { 
+                            const title = match[1].toUpperCase(); 
+                            const content = ver.replace(match[1], "").replace(/^[\s-]/, "").trim(); 
+                            result[title] = content; 
+                        } else if (ver.trim()) { 
+                            result["General"] = (result["General"] || "") + "\n" + ver; 
+                        } 
+                    }); 
+                } 
+                return result; 
+            }, [notes]); 
+ 
+            React.useEffect(() => { 
+                const keys = Object.keys(tabs); 
+                if (!keys.includes(activeTab)) setActiveTab(keys[keys.length - 1]); 
+            }, [tabs]); 
+ 
+            return ( 
+                <div className="flex flex-col h-full"> 
+                    <div className="notes-tabs"> 
+                        {Object.keys(tabs).map(key => ( 
+                            <div key={key} className={`note-tab ${activeTab === key ? 'active' : ''}`} onClick={() => setActiveTab(key)}>{key}</div> 
+                        ))} 
+                    </div> 
+                    <div className="note-content custom-scrollbar">{tabs[activeTab]}</div> 
+                </div> 
+            ); 
+        };   
+ 
+        // 2. MAIN APP COMPONENT 
+        function ShotPilotApp({ user }) { 
+            const savedProject = localStorage.getItem("sp_project") || ""; 
+            const savedPool = localStorage.getItem("sp_pool") || "COMP"; 
+             
+            const [projects, setProjects] = React.useState([]); 
+            const [activeProject, setActiveProject] = React.useState(savedProject); 
+            const [activePool, setActivePool] = React.useState(savedPool); 
+            const [activeTab, setActiveTab] = React.useState("Dashboard"); 
+            const [viewMode, setViewMode] = React.useState(localStorage.getItem("sp_view_mode") || "list"); 
+ 
+            React.useEffect(() => { 
+                if (!user) return; 
+                const db = firebase.database(); 
+                const myStatusRef = db.ref(`status/${user.uid}`); 
+                const connectedRef = db.ref('.info/connected'); 
+ 
+                connectedRef.on('value', (snap) => { 
+                    if (snap.val() === false) return; 
+                    myStatusRef.onDisconnect().set({ state: 'offline', last_changed: firebase.database.ServerValue.TIMESTAMP, email: user.email }).then(() => { 
+                        myStatusRef.set({ state: 'online', last_changed: firebase.database.ServerValue.TIMESTAMP, email: user.email }); 
+                    }); 
+                }); 
+                return () => connectedRef.off(); 
+            }, [user]); 
+ 
+            React.useEffect(() => { localStorage.setItem("sp_view_mode", viewMode); }, [viewMode]); 
+             
+            const [shots, setShots] = React.useState({}); 
+            const [selectedShotId, setSelectedShotId] = React.useState(null); 
+            const [expandedShot, setExpandedShot] = React.useState(null); 
+             
+            const selectedShotData = (shots && selectedShotId) ? shots[selectedShotId] : null; 
+ 
+            const [loading, setLoading] = React.useState(false); 
+            const [exporting, setExporting] = React.useState(false); 
+            const [isBridgeLive, setIsBridgeLive] = React.useState(false); 
+            const [lastSeenTime, setLastSeenTime] = React.useState(null); 
+ 
+            const [projectHistoryCache, setProjectHistoryCache] = React.useState(null); 
+            const [artistsConfig, setArtistsConfig] = React.useState({}); 
+            const [labelsConfig, setLabelsConfig] = React.useState({}); 
+            const [profilesConfig, setProfilesConfig] = React.useState({}); 
+ 
+            const [search, setSearch] = React.useState(""); 
+            const [statusFilter, setStatusFilter] = React.useState([]); 
+            const [sequenceFilter, setSequenceFilter] = React.useState([]); 
+            const [subSeqFilter, setSubSeqFilter] = React.useState([]);    
+            const [artistFilter, setArtistFilter] = React.useState([]); 
+            const [labelFilter, setLabelFilter] = React.useState([]); 
+            const [sourceFilter, setSourceFilter] = React.useState([]); 
+            const [dateFilter, setDateFilter] = React.useState([]); 
+            const [sortConfig, setSortConfig] = React.useState({ key: 'shot_name', direction: 'ascending' }); 
+ 
+            const [contextMenu, setContextMenu] = React.useState(null);  
+            const [historyShot, setHistoryShot] = React.useState(null);  
+            const [historyLogs, setHistoryLogs] = React.useState([]);  
+            const [historyLoading, setHistoryLoading] = React.useState(false); 
+            const [historyStats, setHistoryStats] = React.useState({ subs: 0, kbk: 0 }); 
+            const [selectedShotKey, setSelectedShotKey] = React.useState(null); 
+ 
+            const [notifPermission, setNotifPermission] = React.useState(("Notification" in window) ? Notification.permission : "default"); 
+ 
+            const enableNotifications = () => { 
+                if (!("Notification" in window)) return alert("This browser does not support notifications."); 
+                Notification.requestPermission().then((permission) => { 
+                    setNotifPermission(permission); 
+                    if (permission === "granted") new Notification("Notifications Enabled", { body: "You will now receive updates for ShotPilot.", icon: "SP_Logo.png?v=2" }); 
+                }); 
+            }; 
+ 
+            React.useEffect(() => { localStorage.setItem("sp_project", activeProject); }, [activeProject]); 
+            React.useEffect(() => { localStorage.setItem("sp_pool", activePool); }, [activePool]); 
+ 
+            React.useEffect(() => { 
+                if (!activeProject) return; 
+                const shotsRef = db.ref(`projects/${activeProject}/shots`); 
+                const handleShotChange = (snapshot) => { 
+                    const newVal = snapshot.val(); 
+                    const shotKey = snapshot.key; 
+                    const oldVal = shots[shotKey]; 
+                    if (!oldVal) return; 
+                    const showNotify = (title, body) => { if (Notification.permission === "granted") new Notification(title, { body: body, icon: "SP_Logo.png?v=2" }); }; 
+                    const poolStatus = newVal[`${activePool.toLowerCase()}_status`]; 
+                    const oldStatus = oldVal[`${activePool.toLowerCase()}_status`]; 
+                    if (poolStatus && poolStatus !== oldStatus) showNotify(`Status Update: ${newVal.shot_name}`, `${oldStatus} ➔ ${poolStatus}`); 
+                    const poolArtist = newVal[`${activePool.toLowerCase()}_artist`]; 
+                    const oldArtist = oldVal[`${activePool.toLowerCase()}_artist`]; 
+                    if (poolArtist && poolArtist !== oldArtist && poolArtist !== "—") showNotify(`Artist Assigned: ${newVal.shot_name}`, `Assigned to ${poolArtist}`); 
+                    const poolNotes = newVal[`${activePool.toLowerCase()}_notes`] || ""; 
+                    const oldNotes = oldVal[`${activePool.toLowerCase()}_notes`] || ""; 
+                    if (poolNotes !== oldNotes && /v\d{3}/i.test(poolNotes)) showNotify(`Feedback Imported: ${newVal.shot_name}`, `New feedback received.`); 
+                }; 
+                shotsRef.on('child_changed', handleShotChange); 
+                return () => shotsRef.off('child_changed', handleShotChange); 
+            }, [activeProject, shots, activePool]); 
+ 
+            React.useEffect(() => { 
+                if (!user || user.email !== 'kartik@shotpilot.com') return; 
+                const statusRef = db.ref('status'); 
+                const vipList = ["taniya@shotpilot.com", "kapil@shotpilot.com", "subroto@shotpilot.com"]; 
+                let previousOnlineVIPs = new Set(); 
+                const handleStatusChange = (snapshot) => { 
+                    const data = snapshot.val() || {}; 
+                    const currentOnlineVIPs = new Set(); 
+                    Object.values(data).forEach(u => { 
+                        if (u.state === 'online' && u.email && vipList.includes(u.email)) { 
+                            currentOnlineVIPs.add(u.email); 
+                            if (!previousOnlineVIPs.has(u.email)) { 
+                                if (Notification.permission === "granted") new Notification("ShotPilot Team Alert", { body: `🟢 ${u.email.split('@')[0]} is now Online`, icon: "SP_Logo.png" }); 
+                            } 
+                        } 
+                    }); 
+                    previousOnlineVIPs = currentOnlineVIPs; 
+                }; 
+                statusRef.on('value', handleStatusChange); 
+                return () => statusRef.off('value', handleStatusChange); 
+            }, [user]); 
+ 
+            React.useEffect(() => { 
+                const statusRef = db.ref('server_status/last_seen'); 
+                const evaluateStatus = (timestamp) => { 
+                    if (!timestamp) { setIsBridgeLive(false); return; } 
+                    setIsBridgeLive(Date.now() - timestamp < 8000); 
+                }; 
+                const handleValue = (snap) => { setLastSeenTime(snap.val()); evaluateStatus(snap.val()); }; 
+                statusRef.on('value', handleValue); 
+                const interval = setInterval(() => { statusRef.once('value', snap => evaluateStatus(snap.val())); }, 1000); 
+                return () => { statusRef.off(); clearInterval(interval); }; 
+            }, []); 
+ 
+            const formatLastSync = (timestamp) => { 
+                if (!timestamp) return "--:--"; 
+                return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); 
+            }; 
+ 
+            const sanitizeEmail = (email) => email.replace(/\./g, '_'); 
+ 
+            React.useEffect(() => { 
+                const userEmailKey = sanitizeEmail(user.email); 
+                db.ref(`permissions/${userEmailKey}`).once('value', permSnap => { 
+                    const perms = permSnap.val(); 
+                    if (!perms || perms["ADMIN"] === true) { 
+                        db.ref('projects').once('value', snap => { 
+                            const d = snap.val(); 
+                            if (d) { 
+                                const allProjects = Object.keys(d); 
+                                setProjects(allProjects); 
+                                if (!activeProject && allProjects.length > 0) setActiveProject(allProjects[0]); 
+                            } 
+                        }); 
+                    } else { 
+                        const allowedProjects = Object.keys(perms); 
+                        if (allowedProjects.length === 0) alert("Access Restricted: You have not been assigned to any projects."); 
+                        setProjects(allowedProjects); 
+                        if (!activeProject && allowedProjects.length > 0) setActiveProject(allowedProjects[0]); 
+                        else if (activeProject && !allowedProjects.includes(activeProject)) setActiveProject(allowedProjects[0] || ""); 
+                    } 
+                }); 
+                db.ref('config').on('value', snap => { 
+                    const d = snap.val() || {}; 
+                    if(d.artists) setArtistsConfig(d.artists); 
+                    if(d.labels) setLabelsConfig(d.labels); 
+                    if(d.profiles) setProfilesConfig(d.profiles); 
+                }); 
+            }, [user]); 
+ 
+            React.useEffect(() => { 
+                if(!activeProject) return; 
+                setLoading(true); 
+                setProjectHistoryCache(null); 
+                const ref = db.ref(`projects/${activeProject}/shots`); 
+                const handleData = (snap) => { 
+                    setShots(snap.val() || {}); 
+                    setLoading(false); 
+                }; 
+                ref.on('value', handleData); 
+                return () => ref.off(); 
+            }, [activeProject]); 
+ 
+            React.useEffect(() => { 
+                const handleKeyDown = (e) => { 
+                    if (e.ctrlKey && (e.key === 'h' || e.key === 'H')) { 
+                        e.preventDefault(); 
+                        if (selectedShotKey && shots[selectedShotKey]) setHistoryShot({ key: selectedShotKey, ...shots[selectedShotKey] }); 
+                    } 
+                }; 
+                window.addEventListener('keydown', handleKeyDown); 
+                return () => window.removeEventListener('keydown', handleKeyDown); 
+            }, [selectedShotKey, shots]); 
+ 
+            React.useEffect(() => { 
+                const handleKeyDown = (e) => { 
+                    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return; 
+                    if (viewMode === 'board') return; // Allow native scrolling in board view
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { 
+                        e.preventDefault(); 
+                        if (filtered.length === 0) return; 
+                        let newIndex = 0; 
+                        if (selectedShotId) { 
+                            const currentIndex = filtered.findIndex(s => s.key === selectedShotId); 
+                            if (currentIndex !== -1) { 
+                                if (e.key === 'ArrowDown') newIndex = Math.min(currentIndex + 1, filtered.length - 1); 
+                                else newIndex = Math.max(currentIndex - 1, 0); 
+                            } 
+                        } 
+                        const newShot = filtered[newIndex]; 
+                        setSelectedShotId(newShot.key); 
+                        const rowEl = document.getElementById(`row-${newShot.key}`); 
+                        if (rowEl) rowEl.scrollIntoView({ block: 'nearest' }); 
+                    } 
+                }; 
+                window.addEventListener('keydown', handleKeyDown); 
+                return () => window.removeEventListener('keydown', handleKeyDown); 
+            }, [filtered, selectedShotId]); 
+ 
+            React.useEffect(() => { 
+                if (!historyShot) return; 
+                setHistoryLoading(true); 
+                setHistoryLogs([]); 
+                setHistoryStats({ subs: 0, kbk: 0 }); 
+ 
+                const processRawHistory = (rawItems) => { 
+                    rawItems.sort((a, b) => new Date((a.timestamp || "").replace(" ", "T")) - new Date((b.timestamp || "").replace(" ", "T"))); 
+                    const ALLOWED = ["AWFB", "KBK", "Kickback", "Hold", "Approved"]; 
+                    let subCounter = 0, subs = 0, kbk = 0, processedLogs = []; 
+ 
+                    rawItems.forEach(log => { 
+                        if (!ALLOWED.includes(log.status)) return; 
+                        let context = "", rowClass = ""; 
+                        if (log.status === "AWFB") { 
+                            subCounter++; subs++; 
+                            context = `Sent to Client (${log.version || `v${String(subCounter).padStart(3, '0')}`})`; 
+                        } else if (["KBK", "Kickback"].includes(log.status)) { 
+                            kbk++; context = "Received Kickback"; 
+                        } else if (log.status === "Approved") context = "Final Approval! 🎉"; 
+                        else if (log.status === "Hold") context = "Shot placed on Hold"; 
+                         
+                        let dateStr = "", timeStr = ""; 
+                        try { 
+                            const dt = new Date(log.timestamp.replace(" ", "T")); 
+                            dateStr = dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); 
+                            timeStr = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); 
+                        } catch(e) {} 
+                        processedLogs.push({ ...log, displayDate: dateStr, displayTime: timeStr, context, rowClass }); 
+                    }); 
+                    setHistoryStats({ subs, kbk }); 
+                    setHistoryLogs(processedLogs.reverse()); 
+                    setHistoryLoading(false); 
+                }; 
+ 
+                const findHistory = (data) => { 
+                    const targetId = historyShot.key; 
+                    const safeKey = sanitizeKey(targetId); 
+                    if (data[safeKey]) processRawHistory(Object.values(data[safeKey])); 
+                    else { 
+                        const all = Object.values(data); 
+                        const found = all.filter(h => h.shot_id === targetId || h.shot_id === safeKey); 
+                        processRawHistory(found); 
+                    } 
+                }; 
+ 
+                if (projectHistoryCache) findHistory(projectHistoryCache); 
+                else { 
+                    db.ref(`projects/${activeProject}/status_history`).once('value').then(snap => { 
+                        let d = snap.val(); 
+                        if(!d) return db.ref(`projects/${activeProject}/history`).once('value').then(s => s.val()); 
+                        return d; 
+                    }).then(final => { 
+                        const s = final || {}; 
+                        setProjectHistoryCache(s); 
+                        findHistory(s); 
+                    }); 
+                } 
+            }, [historyShot, activeProject, projectHistoryCache]); 
+ 
+            const handleExportHistoryCSV = () => { 
+                if (!historyLogs.length) return alert("No data"); 
+                const rows = [["Date", "Time", "Status", "Event Context"], ...historyLogs.map(l => [l.displayDate, l.displayTime, l.status, l.context])]; 
+                const csv = "data:text/csv;charset=utf-8," + rows.map(e => e.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n"); 
+                const link = document.createElement("a"); link.href = encodeURI(csv); link.download = `${historyShot.shot_name}_History.csv`; link.click(); 
+            }; 
+ 
+            const handleExportSummaryCSV = (data, filename) => { 
+                if (!data || !data.rows.length) return alert("No data to export."); 
+                const csvContent = [data.headers, ...data.rows, data.grandTotal].map(e => e.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n"); 
+                const link = document.createElement("a"); link.href = "data:text/csv;charset=utf-8," + encodeURI(csvContent); link.download = `${activeProject}_${filename}.csv`; link.click(); 
+            }; 
+ 
+            const handleExportExcel = async () => { 
+                setExporting(true); 
+                try { 
+                    const style = `<style>td { mso-number-format:"\\@"; font-family: Calibri; font-size: 11pt; padding: 4px; border: .5pt solid #000; text-align: center; vertical-align: middle; } .header { font-weight: bold; background-color: #333333; color: white; text-align: center; }</style>`; 
+                    let html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>${style}</head><body><table border="1" style="border-collapse: collapse;"><tr height="40" style="background-color: #333333; color: white;">`; 
+                    const headers = ["Seq", "Sub-Seq", "Shot Name", "Deadline", "Frames", "Label", "Artist", "Status", "Source", "Notes"]; 
+                    headers.forEach(h => html += `<td class="header">${h}</td>`); html += "</tr>"; 
+                    filtered.forEach(shot => { 
+                        const status = shot[getField('status')] || "Unattended"; 
+                        const source = shot[getField('source')] || "Inhouse"; 
+                        const label = shot[getField('label')] || ""; 
+                        const meta = shot.metadata || ""; 
+                        const frameMatch = meta.match(/\((\d+)f\)/); 
+                        const frames = frameMatch ? frameMatch[1] : ""; 
+                        const statusColors = { "Unattended": "#4a4a4a", "In Progress": "#c98014", "Review": "#81d4fa", "Correction": "#c25b5b", "KBK": "#722525", "Hold": "#c5885f", "Completed": "#478f4a", "NTS": "#6030ad", "AWFB": "#f7671a", "Approved": "#0ba12c", "Omit": "#e31414" }; 
+                        const bgStatus = statusColors[status] || "#333"; 
+                        const bgSource = source === "Outsource" ? "#000" : "#fff"; 
+                        const fgSource = source === "Outsource" ? "#fa9400" : "#000"; 
+                        const bgLabel = labelsConfig[label] || "#333"; 
+                        html += `<tr height="30"><td>${shot.sequence_name || shot.subfolder || ""}</td><td>${shot.sub_sequence_name || ""}</td><td style="text-align:left; font-weight:bold;">${shot.shot_name || ""}</td><td>${shot[getField('deadline')] || ""}</td><td>${frames}</td><td style="background-color:${bgLabel}; color:#fff; font-weight:bold;">${label}</td><td>${shot[getField('artist')] || ""}</td><td style="background-color:${bgStatus}; color:white; font-weight:bold;">${status}</td><td style="background-color:${bgSource}; color:${fgSource}; font-weight:bold;">${source}</td><td style="text-align:left;">${(shot[getField('notes')] || "").replace(/(\r\n|\n|\r)/gm, " ")}</td></tr>`; 
+                    }); 
+                    html += "</table></body></html>"; 
+                    const blob = new Blob([html], { type: "application/vnd.ms-excel" }); 
+                    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${activeProject}_Export.xls`; document.body.appendChild(link); link.click(); document.body.removeChild(link); 
+                } catch (e) { alert(e.message); } 
+                setExporting(false); 
+            }; 
+             
+            React.useEffect(() => { 
+                const handleClick = () => setContextMenu(null); 
+                window.addEventListener('click', handleClick); 
+                return () => window.removeEventListener('click', handleClick); 
+            }, []); 
+ 
+            const getField = (f) => `${activePool.toLowerCase()}_${f}`; 
+            const currentArtistList = artistsConfig[activePool] || DEFAULT_ARTISTS; 
+            const allShots = Object.entries(shots).map(([k, v]) => ({ key: k, ...v })); 
+ 
+            const uniqueLabels = React.useMemo(() => { 
+                const defaults = ["Party", "Pass", "Master", "Urgent", "Key Shot", "Blocked", "Tech Fix"]; 
+                const configLabels = Object.keys(labelsConfig); 
+                const usedLabels = allShots.map(s => s[getField('label')]).filter(l => l); 
+                return [...new Set([...defaults, ...configLabels, ...usedLabels])].sort((a, b) => a.localeCompare(b)); 
+            }, [labelsConfig, allShots, activePool]); 
+ 
+            const uniqueSequences = React.useMemo(() => { 
+                const seqs = allShots.map(s => s.sequence_name || s.subfolder).filter(s => s); 
+                return [...new Set(seqs)].sort((a, b) => a.localeCompare(b)); 
+            }, [allShots]); 
+ 
+            const uniqueSubSequences = React.useMemo(() => { 
+                const relevantShots = sequenceFilter.length > 0 ? allShots.filter(s => sequenceFilter.includes(s.sequence_name || s.subfolder)) : allShots; 
+                const subseqs = relevantShots.map(s => s.sub_sequence_name).filter(s => s); 
+                return [...new Set(subseqs)].sort((a, b) => a.localeCompare(b)); 
+            }, [allShots, sequenceFilter]); 
+ 
+            const handleRightClick = (e, shot) => { 
+                e.preventDefault(); 
+                setSelectedShotKey(shot.key); 
+                setContextMenu({ x: e.pageX, y: e.pageY, shot: shot }); 
+            }; 
+ 
+            const filtered = React.useMemo(() => { 
+                const normalize = (str) => (str || "").toLowerCase().replace(/[^a-z0-9]/g, ""); 
+                let searchTokens = []; 
+                if (search) { const rawTokens = search.split(/[\s,]+/); rawTokens.forEach(t => { if (t.trim()) searchTokens.push(normalize(t)); }); } 
+ 
+                let res = allShots.filter(s => { 
+                    const sNameRaw = s.shot_name || ""; 
+                    const sArtRaw = s[getField('artist')] || ""; 
+                    const sStat = s[getField('status')] || "Unattended"; 
+                    const sLabel = s[getField('label')] || ""; 
+                    const sSource = s[getField('source')] || "Inhouse"; 
+                    const sDead = s[getField('deadline')] || ""; 
+                    const sNameClean = normalize(sNameRaw); 
+                    const sArtClean = normalize(sArtRaw); 
+ 
+                    if (searchTokens.length > 0) { if (!searchTokens.some(token => sNameClean.includes(token) || sArtClean.includes(token))) return false; } 
+                    if (statusFilter.length > 0 && !statusFilter.includes(sStat)) return false; 
+                    if (artistFilter.length > 0 && !artistFilter.includes(sArtRaw)) return false; 
+                    if (labelFilter.length > 0 && !labelFilter.includes(sLabel)) return false; 
+                    if (sourceFilter.length > 0 && !sourceFilter.includes(sSource)) return false; 
+                    if (dateFilter.length > 0 && !dateFilter.includes(sDead)) return false; 
+                    const sSeq = s.sequence_name || s.subfolder || ""; 
+                    const sSubSeq = s.sub_sequence_name || ""; 
+                    if (sequenceFilter.length > 0 && !sequenceFilter.includes(sSeq)) return false; 
+                    if (subSeqFilter.length > 0 && !subSeqFilter.includes(sSubSeq)) return false; 
+                    return true; 
+                }); 
+ 
+                if (sortConfig.key) { 
+                    res.sort((a, b) => { 
+                        let aVal = sortConfig.key === 'shot_name' ? a.shot_name : (a[getField(sortConfig.key)] || ""); 
+                        let bVal = sortConfig.key === 'shot_name' ? b.shot_name : (b[getField(sortConfig.key)] || ""); 
+                        if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1; 
+                        if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1; 
+                        return 0; 
+                    }); 
+                } 
+                return res; 
+            }, [shots, search, statusFilter, artistFilter, labelFilter, sourceFilter, dateFilter, activePool, sortConfig, sequenceFilter, subSeqFilter]); 
+ 
+            const dashboardSummary = React.useMemo(() => { 
+                if (filtered.length === 0) return ""; 
+                const counts = {}; 
+                filtered.forEach(s => { const st = s[getField('status')] || "Unattended"; counts[st] = (counts[st] || 0) + 1; }); 
+                return Object.keys(counts).sort().map(status => `${status} (${counts[status]})`).join(", "); 
+            }, [filtered, activePool]); 
+ 
+            const durationData = React.useMemo(() => { 
+                let f = 0; 
+                filtered.forEach(s => { const m = (s.metadata || "").match(/\((\d+)f\)/); if (m) f += parseInt(m[1], 10); }); 
+                const sec = Math.floor(f / 24.0); 
+                return { frames: f, time: `${Math.floor(sec/60).toString().padStart(2,'0')}:${(sec%60).toString().padStart(2,'0')}` }; 
+            }, [filtered]); 
+ 
+            const countStat = (st) => allShots.filter(s => s[getField('status')] === st).length; 
+            const countLabel = (lbl) => allShots.filter(s => s[getField('label')] === lbl).length; 
+            const countPending = (src) => allShots.filter(s => ["KBK", "In Progress", "Correction", "Review"].includes(s[getField('status')]) && (s[getField('source')]||"Inhouse") === src).length; 
+            const uniqueDates = [...new Set(allShots.map(s => s[getField('deadline')] || "").filter(Boolean))].sort(); 
+ 
+            const clearFilters = () => { setSearch(""); setStatusFilter([]); setArtistFilter([]); setLabelFilter([]); setSourceFilter([]); setDateFilter([]); setSequenceFilter([]); setSubSeqFilter([]); }; 
+            const requestSort = (key) => setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'ascending' ? 'descending' : 'ascending' }); 
+             
+            const handleCardClick = (stat) => { clearFilters(); setStatusFilter([stat]); }; 
+            const handleRefresh = () => { setLoading(true); db.ref(`projects/${activeProject}/shots`).once('value', s => { setShots(s.val() || {}); setLoading(false); }); }; 
+ 
+            const userName = user.email.split('@')[0]; 
+            const userProfileImg = profilesConfig[userName] || null; 
+ 
+            const poolSummaryData = React.useMemo(() => { 
+                const data = {}; const artists = new Set(); 
+                allShots.forEach(shot => { 
+                    const artist = shot[getField('artist')] || "None"; const status = shot[getField('status')] || "Unattended"; 
+                    if (!data[artist]) data[artist] = {}; data[artist][status] = (data[artist][status] || 0) + 1; artists.add(artist); 
+                }); 
+                const sortedArtists = Array.from(artists).sort(); 
+                const headers = ["Artist", ...STATUS_OPTIONS, "Total", "Remaining"]; 
+                const rows = sortedArtists.map(art => { 
+                    const rowCounts = data[art] || {}; const statusCells = STATUS_OPTIONS.map(st => rowCounts[st] || ""); 
+                    const total = Object.entries(rowCounts).reduce((acc, [st, count]) => IGNORE_STATUSES.includes(st) ? acc : acc + count, 0); 
+                    const done = DONE_STATUSES.reduce((acc, st) => acc + (rowCounts[st] || 0), 0); 
+                    return [art, ...statusCells, total, Math.max(0, total - done)]; 
+                }); 
+                const grandTotal = headers.map((_, colIdx) => { 
+                    if (colIdx === 0) return "Grand Total (Excl. None)"; 
+                    return rows.reduce((sum, row) => { 
+                        if (row[0] === "None" || row[0] === "Unassigned" || row[0] === "—") return sum; 
+                        return sum + (parseInt(row[colIdx]) || 0); 
+                    }, 0); 
+                }); 
+                return { headers, rows, grandTotal }; 
+            }, [allShots, activePool]); 
+ 
+            const [breakdownArtists, setBreakdownArtists] = React.useState([]);  
+ 
+            const breakdownData = React.useMemo(() => { 
+                if (breakdownArtists.length === 0) return { headers: [], rows: [], totalAllocated: 0 }; 
+                const agg = {};  
+                allShots.forEach(shot => { 
+                    const artist = shot[getField('artist')] || "None"; 
+                    if (breakdownArtists.includes(artist)) { 
+                        const cat = shot.subfolder || "General"; const status = shot[getField('status')] || "Unattended"; 
+                        if (!agg[cat]) agg[cat] = {}; agg[cat][status] = (agg[cat][status] || 0) + 1; 
+                    } 
+                }); 
+                const headers = ["Category", ...STATUS_OPTIONS, "Total", "Remaining"]; 
+                const rows = Object.keys(agg).sort().map(cat => { 
+                    const statuses = agg[cat]; const statusCells = STATUS_OPTIONS.map(st => statuses[st] || ""); 
+                    const total = Object.entries(statuses).reduce((acc, [st, count]) => IGNORE_STATUSES.includes(st) ? acc : acc + count, 0); 
+                    const done = DONE_STATUSES.reduce((acc, st) => acc + (statuses[st] || 0), 0); 
+                    return [cat, ...statusCells, total, Math.max(0, total - done)]; 
+                }); 
+                const grandTotal = headers.map((_, colIdx) => { 
+                    if (colIdx === 0) return "Grand Total"; return rows.reduce((sum, row) => sum + (parseInt(row[colIdx]) || 0), 0); 
+                }); 
+                return { headers, rows, grandTotal, totalAllocated: grandTotal[headers.length - 2] }; 
+            }, [allShots, activePool, breakdownArtists]); 
+ 
+            const distributionData = React.useMemo(() => { 
+                const struct = {}; const allSubfolders = new Set(); const allArtists = new Set(); 
+                allShots.forEach(shot => { 
+                    const cat = shot.category_type || guessCategory(shot.subfolder); 
+                    const src = shot[getField('source')] || "Inhouse"; const sub = shot.subfolder || "General"; 
+                    const art = shot[getField('artist')] || "None"; const status = shot[getField('status')] || "Unattended"; 
+                    const initObj = () => ({ total: 0, done: 0 }); 
+                    if (!struct[cat]) struct[cat] = { "All": {}, "Inhouse": {}, "Outsource": {} }; 
+                    if (!struct[cat]["All"][sub]) struct[cat]["All"][sub] = {}; if (!struct[cat]["All"][sub][art]) struct[cat]["All"][sub][art] = initObj(); 
+                    if (!struct[cat][src][sub]) struct[cat][src][sub] = {}; if (!struct[cat][src][sub][art]) struct[cat][src][sub][art] = initObj(); 
+                    if (!IGNORE_STATUSES.includes(status)) { 
+                        struct[cat]["All"][sub][art].total += 1; struct[cat][src][sub][art].total += 1; 
+                        if (DONE_STATUSES.includes(status)) { struct[cat]["All"][sub][art].done += 1; struct[cat][src][sub][art].done += 1; } 
+                    } 
+                    allSubfolders.add(sub); if (art !== "None" && art !== "—") allArtists.add(art); 
+                }); 
+                return { struct, sortedSubfolders: Array.from(allSubfolders).sort(), sortedArtists: Array.from(allArtists).sort() }; 
+            }, [allShots, activePool]); 
+ 
+            const getSummaryData = (poolName, sourceFilterType) => { 
+                const data = {}; const artists = new Set(); const pKey = poolName.toLowerCase(); 
+                allShots.forEach(shot => { 
+                    const shotSource = shot[`${pKey}_source`] || "Inhouse"; 
+                    if (sourceFilterType !== "All" && shotSource !== sourceFilterType) return; 
+                    const artist = shot[`${pKey}_artist`] || "None"; const status = shot[`${pKey}_status`] || "Unattended"; 
+                    if (!data[artist]) data[artist] = {}; data[artist][status] = (data[artist][status] || 0) + 1; artists.add(artist); 
+                }); 
+                const sortedArtists = Array.from(artists).sort(); 
+                const headers = ["Artist", ...STATUS_OPTIONS, "Total", "Remaining"]; 
+                const rows = sortedArtists.map(art => { 
+                    const rowCounts = data[art] || {}; const statusCells = STATUS_OPTIONS.map(st => rowCounts[st] || ""); 
+                    const total = Object.entries(rowCounts).reduce((acc, [st, count]) => IGNORE_STATUSES.includes(st) ? acc : acc + count, 0); 
+                    const done = DONE_STATUSES.reduce((acc, st) => acc + (rowCounts[st] || 0), 0); 
+                    return [art, ...statusCells, total, Math.max(0, total - done)]; 
+                }); 
+                const grandTotal = headers.map((_, colIdx) => { 
+                    if (colIdx === 0) return "Grand Total (Excl. None)"; 
+                    return rows.reduce((sum, row) => { 
+                        if (row[0] === "None" || row[0] === "Unassigned" || row[0] === "—") return sum; return sum + (parseInt(row[colIdx]) || 0); 
+                    }, 0); 
+                }); 
+                const totalOmitted = allShots.reduce((acc, shot) => { 
+                    const src = shot[`${pKey}_source`] || "Inhouse"; 
+                    if (sourceFilterType !== "All" && src !== sourceFilterType) return acc; return (shot[`${pKey}_status`] === "Omit") ? acc + 1 : acc; 
+                }, 0); 
+                return { headers, rows, grandTotal, totalOmitted }; 
+            }; 
+ 
+            const summaryViews = React.useMemo(() => ({ 
+                compAll: getSummaryData('comp', 'All'), compOutsource: getSummaryData('comp', 'Outsource'), 
+                rotoAll: getSummaryData('roto', 'All'), rotoInhouse: getSummaryData('roto', 'Inhouse'), rotoOutsource: getSummaryData('roto', 'Outsource'), 
+                paintAll: getSummaryData('paint', 'All'), paintInhouse: getSummaryData('paint', 'Inhouse'), paintOutsource: getSummaryData('paint', 'Outsource'), 
+            }), [allShots]); 
+ 
+            const [rotoPaintSubTab, setRotoPaintSubTab] = React.useState("Roto (All)"); 
+            const [distCategoryTab, setDistCategoryTab] = React.useState(null); 
+            const [distSourceTab, setDistSourceTab] = React.useState("All"); 
+ 
+            React.useEffect(() => { 
+                const cats = Object.keys(distributionData.struct).sort(); 
+                if (cats.length > 0 && !distCategoryTab) setDistCategoryTab(cats[0]); 
+            }, [distributionData]); 
+ 
+            return ( 
+                <div className="app-container"> 
+                    <AdminPresencePanel currentUser={user} /> 
+                    <ExpandedViewer isOpen={!!expandedShot} onClose={() => setExpandedShot(null)} shotName={expandedShot?.shot_name} imageSrc={expandedShot?.thumbnail} metadata={expandedShot?.metadata} /> 
+                    {exporting && <div className="loading-overlay">Generating CSV...</div>} 
+                     
+                    {/* Header */} 
+                    <div className="flex flex-col md:flex-row justify-between items-start header-container"> 
+                        <div className="flex flex-col gap-2 mb-4 md:mb-0"> 
+                            <div className="header-title-row"> 
+                                <div className="text-4xl font-extrabold text-white tracking-tighter" style={{textShadow: '0 0 30px rgba(0,0,0,0.5)'}}>Shot<span className="text-[#fa9400]">Pilot</span></div> 
+                                <div className={`live-indicator ${isBridgeLive ? 'is-live' : 'is-offline'}`}> 
+                                    <div className="live-dot"></div> 
+                                    <div className="live-info-col"> 
+                                        <span className="live-text">{isBridgeLive ? 'LIVE' : 'OFFLINE'}</span> 
+                                        {!isBridgeLive && lastSeenTime && <span className="last-synced">Last: {formatLastSync(lastSeenTime)}</span>} 
+                                    </div> 
+                                </div> 
+                            </div> 
+                            <div className="flex items-center gap-3 bg-white/5 p-1 pr-4 rounded-full border border-white/10 cursor-pointer hover:bg-white/10 w-max transition-all" onClick={() => { clearFilters(); setArtistFilter([userName]); }}> 
+                                {userProfileImg ? <img src={userProfileImg} className="w-8 h-8 rounded-full object-cover border-2 border-white/20" /> : <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center font-bold text-black border-2 border-white/20 shadow-lg">{user.email[0].toUpperCase()}</div>} 
+                                <div><div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Artist</div><div className="text-sm font-bold text-white leading-none">{userName}</div></div> 
+                            </div> 
+                        </div> 
+ 
+                        <div className="w-full md:w-auto bg-white/5 border border-white/10 rounded-2xl p-4 relative mt-2 md:mt-0 flex-1 md:mx-4 shadow-lg backdrop-blur-md"> 
+                            <div className="absolute -top-3 left-4 bg-[#111] px-2 text-[10px] font-bold text-gray-400 border border-white/10 rounded-full tracking-wider">PROJECT DASHBOARD</div> 
+                            <div className="dashboard-grid"> 
+                                <div className="dash-card" onClick={() => {clearFilters(); setDateFilter([new Date().toISOString().split('T')[0]]);}} style={{borderColor:'rgba(239, 68, 68, 0.3)'}}> 
+                                    <div className="dash-title text-red-400">Due Today</div> 
+                                    <div className="dash-value text-red-500" style={{textShadow: '0 0 15px rgba(239, 68, 68, 0.4)'}}>{allShots.filter(s => s[getField('deadline')] === new Date().toISOString().split('T')[0]).length}</div> 
+                                </div> 
+                                {["Correction", "KBK", "In Progress", "Review", "NTS", "AWFB", "Approved"].map(st => { 
+                                    const colors = { "Correction":"#c25b5b", "KBK":"#722525", "In Progress":"#c98014", "Review":"#81d4fa", "NTS":"#6030ad", "AWFB":"#f7671a", "Approved":"#0ba12c" }; 
+                                    return ( 
+                                        <div key={st} className="dash-card" onClick={()=>handleCardClick(st)} style={{borderColor: `rgba(255,255,255,0.1)`}}> 
+                                            <div className="dash-title" style={{color: colors[st]}}>{st}</div> 
+                                            <div className="dash-value text-white">{countStat(st)}</div> 
+                                        </div> 
+                                    ) 
+                                })} 
+                            </div> 
+                        </div> 
+ 
+                        <div className="flex flex-col items-end justify-between h-full gap-2 mt-4 md:mt-0"> 
+                            <div className="flex flex-col items-end gap-2"> 
+                                <button onClick={()=>auth.signOut()} className="text-[10px] font-bold text-red-400 hover:text-white border border-red-500/30 px-3 py-1 rounded-full uppercase tracking-wider transition-colors hover:bg-red-500/20">Sign Out</button> 
+                                <img src="Flamboyant_LOGO_black.png" className="h-8 object-contain opacity-80" style={{filter: 'invert(1) brightness(2)'}} alt="" /> 
+                            </div> 
+                            <div className="duration-box hidden md:flex"> 
+                                <div className="duration-title">Visible Duration</div> 
+                                <div className="duration-value text-orange-400">Min ({durationData.time})<br/><span className="text-gray-400 font-normal text-xs">({durationData.frames} frames)</span></div> 
+                            </div> 
+                        </div> 
+                    </div> 
+ 
+                    {/* --- DYNAMIC LABEL PILLS --- */} 
+                    <div className="flex flex-wrap justify-center py-3 bg-black/20 border-b border-white/5 gap-2 flex-shrink-0 px-2 overflow-x-auto backdrop-blur-sm"> 
+                        {uniqueLabels.map(label => { 
+                            const count = countLabel(label); 
+                            if (count === 0) return null; 
+                            const color = labelsConfig[label] || "#3e3e3e";  
+                            return ( 
+                                <button key={label} className="mini-pill" style={{ backgroundColor: color, borderColor: color, color: '#fff' }} onClick={()=>{clearFilters(); setLabelFilter([label]);}}> 
+                                    {label}: {count} 
+                                </button> 
+                            ) 
+                        })} 
+                        <div className="w-px bg-white/10 mx-2 h-6 self-center hidden md:block"></div> 
+                        <button className="mini-pill pill-red" onClick={()=>{clearFilters(); setSourceFilter(["Inhouse"]); setStatusFilter(["KBK", "In Progress", "Correction", "Review"]);}}>IN Pending: {countPending("Inhouse")}</button> 
+                        <button className="mini-pill pill-red" onClick={()=>{clearFilters(); setSourceFilter(["Outsource"]); setStatusFilter(["KBK", "In Progress", "Correction", "Review"]);}}>OS Pending: {countPending("Outsource")}</button> 
+                    </div> 
+ 
+                    {/* --- TAB NAVIGATION --- */} 
+                    <div className="tab-bar"> 
+                        {["Dashboard", "Artist Breakdown", "Shot Distribution", "Comp Summary", "Roto/Paint Summary"].map(t => ( 
+                            <div key={t} className={`tab ${activeTab===t?'active':''}`} onClick={()=>setActiveTab(t)}>{t}</div> 
+                        ))} 
+                    </div> 
+ 
+                    <div className="glass-panel flex-1 flex flex-col m-2 mt-0 border-t-0 rounded-t-none overflow-hidden relative"> 
+                         
+                        {/* --- TAB 1: DASHBOARD --- */} 
+                        {activeTab === "Dashboard" && ( 
+                            <> 
+                                <div className="flex flex-col md:flex-row justify-between items-center p-3 pb-0 flex-shrink-0 gap-2"> 
+                                    <div className="flex rounded-lg overflow-hidden shadow-lg"> 
+                                        {["COMP", "ROTO", "PAINT"].map(pool => ( 
+                                            <button key={pool} className={`pool-btn ${activePool===pool?'active':''}`} onClick={()=>setActivePool(pool)}>{pool}</button> 
+                                        ))} 
+                                    </div> 
+                                    <div className="text-gray-400 font-mono text-[10px] tracking-wide">{dashboardSummary}</div> 
+                                </div> 
+ 
+                                <div className="toolbar-container m-3"> 
+                                    <div className="toolbar-item"> 
+                                        <select className="font-bold text-[#fa9400] border-[#fa9400]/50" value={activeProject} onChange={e=>setActiveProject(e.target.value)}> 
+                                            {projects.map(p=><option key={p} value={p}>{p}</option>)} 
+                                        </select> 
+                                    </div> 
+                                    <div className="toolbar-item search-box"> 
+                                        <input className="w-full" placeholder="Search shots..." value={search} onChange={e=>setSearch(e.target.value)} /> 
+                                    </div> 
+                                    <div className="toolbar-item"><MultiSelect label="EP/Reel" options={uniqueSequences} selected={sequenceFilter} onChange={setSequenceFilter} /></div> 
+                                    <div className="toolbar-item"><MultiSelect label="Sub-Seq" options={uniqueSubSequences} selected={subSeqFilter} onChange={setSubSeqFilter} /></div> 
+                                    <div className="toolbar-item"><MultiSelect label="Label" options={uniqueLabels} selected={labelFilter} onChange={setLabelFilter} /></div> 
+                                    <div className="toolbar-item"><MultiSelect label="Artist" options={currentArtistList} selected={artistFilter} onChange={setArtistFilter} /></div> 
+                                    <div className="toolbar-item"><MultiSelect label="Status" options={STATUS_OPTIONS} selected={statusFilter} onChange={setStatusFilter} /></div> 
+                                    <div className="toolbar-item"><MultiSelect label="Source" options={["Inhouse", "Outsource"]} selected={sourceFilter} onChange={setSourceFilter} /></div> 
+                                    <div className="toolbar-item"><MultiSelect label="Deadline" options={uniqueDates} selected={dateFilter} onChange={setDateFilter} alignRight={true} /></div> 
+                                     
+                                    <div className="flex items-center mr-2 border-r border-white/10 pr-2"> 
+                                        <button className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} title="List View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg></button> 
+                                        <button className={`view-toggle-btn ${viewMode === 'board' ? 'active' : ''}`} onClick={() => setViewMode('board')} title="Board View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg></button> 
+                                    </div> 
+ 
+                                    <div className="toolbar-item flex items-center" style={{width: 'auto'}}> 
+                                        {notifPermission === "default" && <button onClick={enableNotifications} className="px-3 bg-[#fa9400] text-black font-bold rounded-lg h-[32px] mr-2 animate-pulse hover:bg-orange-400" title="Enable Push Notifications">🔔</button>} 
+                                        <button onClick={clearFilters} title="Clear Filters" className="px-3 bg-white/10 text-white rounded-lg hover:bg-white/20 h-[32px] mr-2 transition-colors">↺</button> 
+                                        <button onClick={handleExportExcel} className="bg-blue-600/80 text-white px-3 py-1 rounded-lg border border-blue-400/30 hover:bg-blue-600 text-xs font-bold h-[32px] transition-colors shadow-lg">Export XLS</button> 
+                                        <button onClick={handleRefresh} className="text-[#fa9400] font-bold px-2 ml-2 hover:text-white transition-colors text-xs uppercase tracking-wide">Refresh</button> 
+                                    </div> 
+                                </div> 
+ 
+                                <div className="workspace-split"> 
+                                    <div className="table-panel"> 
+                                        <div className="table-wrapper custom-scrollbar"> 
+                                            {loading ? <div className="text-center p-20 text-gray-500 font-light text-xl animate-pulse">Loading Shot Data...</div> : ( 
+                                                viewMode === 'list' ? ( 
+                                                    <table className="w-full"> 
+                                                       <thead> 
+                                                            <tr> 
+                                                                <th className="w-[60px]" onClick={()=>requestSort('seq')}>EP</th> 
+                                                                <th className="w-[60px]" onClick={()=>requestSort('sub_sequence_name')}>Sub-Seq</th> 
+                                                                <th onClick={()=>requestSort('shot_name')}>Shot Name</th> 
+                                                                <th className="w-[100px] text-center" onClick={()=>requestSort('deadline')}>Deadline</th> 
+                                                                <th className="w-[80px] text-center" onClick={()=>requestSort('label')}>Label</th> 
+                                                                <th className="w-[100px] text-center" onClick={()=>requestSort('artist')}>Artist</th> 
+                                                                <th className="w-[110px] text-center" onClick={()=>requestSort('status')}>Status</th> 
+                                                                <th className="w-[100px] text-center" onClick={()=>requestSort('source')}>Source</th> 
+                                                            </tr> 
+                                                        </thead> 
+                                                        <tbody> 
+                                                            {filtered.map(shot => { 
+                                                                const status = shot[getField('status')] || "Unattended"; const label = shot[getField('label')] || ""; const isSelected = shot.key === selectedShotId; 
+                                                                return ( 
+                                                                    <tr key={shot.key} id={`row-${shot.key}`} className={`shot-row cursor-pointer ${isSelected ? 'selected' : ''}`} onClick={() => setSelectedShotId(shot.key)} onContextMenu={e => handleRightClick(e, shot)}> 
+                                                                        <td className="text-gray-400 px-3 font-bold">{shot.sequence_name || shot.subfolder}</td> 
+                                                                        <td className="text-gray-500 px-3">{shot.sub_sequence_name || "-"}</td> 
+                                                                        <td className="font-bold text-white px-3 select-text tracking-wide">{shot.shot_name}</td> 
+                                                                        <td className="text-center p-1 text-gray-400 font-mono text-xs">{shot[getField('deadline')] || ""}</td> 
+                                                                        <td className="text-center"><div className="lbl-pill" style={{backgroundColor: labelsConfig[label] || "rgba(255,255,255,0.1)"}}>{label || "-"}</div></td> 
+                                                                        <td className="text-center text-gray-300">{shot[getField('artist')] || "—"}</td> 
+                                                                        <td className="p-1"><div className={`status-cell bg-${status.replace(/\s+/g, '')} rounded-md`}>{status}</div></td> 
+                                                                        <td className={`text-center font-bold ${shot[getField('source')] === 'Outsource' ? 'text-orange-500' : 'text-gray-500'}`}>{shot[getField('source')] || "Inhouse"}</td> 
+                                                                    </tr> 
+                                                                ) 
+                                                            })} 
+                                                        </tbody> 
+                                                    </table> 
+                                                ) : ( 
+                                                    <div className="board-grid-container custom-scrollbar"> 
+                                                        {filtered.map(shot => { 
+                                                            const status = shot[getField('status')] || "Unattended"; const source = shot[getField('source')] || "Inhouse"; 
+                                                            const artist = shot[getField('artist')] || "—"; const label = shot[getField('label')] || ""; 
+                                                            const statusNoSpace = status.replace(/\s+/g, ''); 
+                                                            return ( 
+                                                                <div key={shot.key} className="board-card" onClick={() => setExpandedShot(shot)} onContextMenu={e => handleRightClick(e, shot)}> 
+                                                                    <div className="board-card-thumb"> 
+                                                                        {shot.thumbnail ? <img src={shot.thumbnail} alt={shot.shot_name} /> : <div className="text-gray-700 font-bold text-xs">NO PREVIEW</div>} 
+                                                                    </div> 
+                                                                    <div className="board-card-body"> 
+                                                                        <div className="board-card-title" title={shot.shot_name}>{shot.shot_name}</div> 
+                                                                        <div className="board-card-seq">{shot.sequence_name || shot.subfolder}</div> 
+                                                                        <div className="board-pill-row"> 
+                                                                            <div className={`board-pill bg-${statusNoSpace} text-white`}>{status}</div> 
+                                                                            <div className="board-pill" style={{backgroundColor: labelsConfig[label] || "rgba(255,255,255,0.1)", color: 'white'}}>{label || "-"}</div> 
+                                                                        </div> 
+                                                                        <div className="board-tags"> 
+                                                                            {status === 'Omit' && <span className="tag-pill tag-omit">OMIT</span>} 
+                                                                            {source === 'Outsource' ? <span className="tag-pill tag-out">OUT</span> : <span className="tag-pill tag-in">IN</span>} 
+                                                                            {status === 'Approved' && status !== 'Omit' && <span className="tag-pill bg-green-600">FINAL</span>} 
+                                                                        </div> 
+                                                                        <div className="board-footer"> 
+                                                                            <div className="flex items-center gap-2 overflow-hidden"> 
+                                                                                 <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[9px] text-white font-bold flex-shrink-0">{artist !== "—" ? artist.charAt(0) : "?"}</div> 
+                                                                                <span className="truncate">{artist}</span> 
+                                                                            </div> 
+                                                                        </div> 
+                                                                    </div> 
+                                                                </div> 
+                                                            ); 
+                                                        })} 
+                                                    </div> 
+                                                ) 
+                                            )} 
+                                        </div> 
+                                        <div className="bg-black/40 p-2 text-right text-xs text-orange-500 font-bold border-t border-white/5 flex justify-between backdrop-blur-md"> 
+                                             {viewMode === 'board' && <span className="text-gray-500 italic ml-2">Tip: Click card to expand view</span>} 
+                                             <span>Showing {filtered.length} shots</span> 
+                                        </div> 
+                                    </div> 
+ 
+                                    {viewMode === 'list' && ( 
+                                        <div className="details-panel custom-scrollbar"> 
+                                            {selectedShotData ? ( 
+                                                <> 
+                                                    <div className="detail-header">{selectedShotData.shot_name}</div> 
+                                                    <div className="detail-thumb cursor-zoom-in group" onClick={() => setExpandedShot(selectedShotData)} title="Click to expand"> 
+                                                        {selectedShotData.thumbnail ? <img src={selectedShotData.thumbnail} alt="Preview" className="group-hover:scale-105 transition-transform duration-500" /> : <div className="text-gray-600 font-bold text-2xl">NO PREVIEW</div>} 
+                                                    </div> 
+                                                    <div className="meta-box"><div className="text-[#fa9400] font-bold text-[10px] uppercase mb-1 tracking-wider">Metadata</div><div className="text-gray-400 text-xs font-mono">{selectedShotData.metadata || "Not scanned yet."}</div></div> 
+                                                    <div className="flex-1 flex flex-col min-h-0"><div className="text-[#fa9400] font-bold text-[10px] uppercase p-3 pb-1 bg-transparent tracking-wider">Notes / Feedback</div><NotesViewer notes={selectedShotData[getField('notes')]} /></div> 
+                                                </> 
+                                            ) : (<div className="flex flex-1 items-center justify-center text-gray-600 font-bold text-sm tracking-wide">Select a shot to view details</div>)} 
+                                        </div> 
+                                    )} 
+                                </div> 
+                            </> 
+                        )} 
+ 
+                        {activeTab === "Artist Breakdown" && ( 
+                            <div className="p-6 h-full flex flex-col gap-6 overflow-hidden animate-fadeIn"> 
+                                <div className="flex items-center gap-6 flex-shrink-0 bg-white/5 p-4 rounded-xl border border-white/10 shadow-lg"> 
+                                    <label className="font-bold text-[#fa9400]">Select Artist(s):</label> 
+                                    <div className="w-72"> 
+                                        <MultiSelect label="Filter Artists" options={currentArtistList} selected={breakdownArtists} onChange={setBreakdownArtists} /> 
+                                    </div> 
+                                    <div className="flex-1 text-right font-bold text-xl text-white"> 
+                                        Total Allocated: <span className="text-[#fa9400] text-2xl">{breakdownData.totalAllocated}</span> 
+                                    </div> 
+                                </div> 
+                                <div className="flex-1 overflow-auto custom-scrollbar"> 
+                                    <SummaryTable headers={breakdownData.headers} rows={breakdownData.rows} totalRow={breakdownData.grandTotal} /> 
+                                </div> 
+                            </div> 
+                        )} 
+ 
+                        {activeTab === "Shot Distribution" && ( 
+                            <div className="p-6 h-full flex flex-col gap-6 overflow-hidden animate-fadeIn"> 
+                                <div className="flex border-b border-white/10 gap-2 overflow-x-auto pb-1"> 
+                                    {Object.keys(distributionData.struct).sort().map(cat => ( 
+                                        <div key={cat} onClick={()=>setDistCategoryTab(cat)} className={`px-5 py-2 cursor-pointer font-bold rounded-t-lg transition-colors ${distCategoryTab===cat ? 'bg-white/10 text-[#fa9400] border-b-2 border-[#fa9400]' : 'text-gray-500 hover:text-gray-300'}`}> 
+                                            {cat === "Other" ? activePool : cat} 
+                                        </div> 
+                                    ))} 
+                                </div> 
+                                <div className="flex gap-2"> 
+                                    {["All", "Inhouse", "Outsource"].map(src => ( 
+                                        <button key={src} onClick={()=>setDistSourceTab(src)} className={`px-4 py-1.5 rounded-lg text-xs font-bold border transition-all ${distSourceTab===src ? 'bg-[#fa9400] text-black border-[#fa9400] shadow-lg shadow-orange-500/20' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}> 
+                                            {src} 
+                                        </button> 
+                                    ))} 
+                                </div> 
+                                <div className="flex-1 overflow-auto custom-scrollbar"> 
+                                    {distCategoryTab && distributionData.struct[distCategoryTab] && ( 
+                                        (() => { 
+                                            const subData = distributionData.struct[distCategoryTab][distSourceTab] || {}; 
+                                            const activeArtists = distributionData.sortedArtists; 
+                                            const subfolders = Object.keys(subData).sort();  
+                                            const cols = subfolders.length > 0 ? subfolders : distributionData.sortedSubfolders; 
+                                            const headers = ["Artist", ...cols, "Total", "Remaining"]; 
+                                            const rows = activeArtists.map(art => { 
+                                                let rowTotal = 0; let rowDone = 0; 
+                                                const cells = cols.map(sub => { 
+                                                    const dataObj = (subData[sub] && subData[sub][art]) || { total: 0, done: 0 }; 
+                                                    rowTotal += dataObj.total; rowDone += dataObj.done; 
+                                                    return dataObj.total || ""; 
+                                                }); 
+                                                if (rowTotal === 0 && distSourceTab !== "All") return null; 
+                                                return [art, ...cells, rowTotal, Math.max(0, rowTotal - rowDone)]; 
+                                            }).filter(Boolean); 
+                                            const grandTotal = headers.map((_, colIdx) => { 
+                                                if (colIdx === 0) return "Grand Total (Excl. None)"; 
+                                                return rows.reduce((sum, row) => { 
+                                                    if (row[0] === "None" || row[0] === "Unassigned" || row[0] === "—") return sum; return sum + (parseInt(row[colIdx]) || 0); 
+                                                }, 0); 
+                                            }); 
+                                            return ( 
+                                                <div className="flex flex-col gap-2"> 
+                                                    <SummaryTable headers={headers} rows={rows} totalRow={grandTotal} /> 
+                                                    <div className="text-gray-500 text-[10px] italic text-right mt-2">* 'None' / 'Unassigned' shots are excluded from the Grand Total.</div> 
+                                                </div> 
+                                            ); 
+                                        })() 
+                                    )} 
+                                </div> 
+                            </div> 
+                        )} 
+ 
+                        {activeTab === "Comp Summary" && ( 
+                            <div className="p-6 h-full flex flex-col gap-8 overflow-y-auto animate-fadeIn custom-scrollbar"> 
+                                <div className="flex flex-col gap-4"> 
+                                    <div className="flex justify-between items-end border-b border-white/10 pb-3"> 
+                                        <h3 className="text-[#fa9400] font-bold text-xl tracking-tight">Comp (All Shots)</h3> 
+                                        <div className="flex items-center gap-4"> 
+                                            <span className="text-gray-500 text-xs font-bold uppercase">Omitted: {summaryViews.compAll.totalOmitted}</span> 
+                                            <button onClick={() => handleExportSummaryCSV(summaryViews.compAll, "Comp_All_Summary")} className="bg-white/10 text-white px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/20 text-xs font-bold transition-colors">Export CSV</button> 
+                                        </div> 
+                                    </div> 
+                                    <SummaryTable headers={summaryViews.compAll.headers} rows={summaryViews.compAll.rows} totalRow={summaryViews.compAll.grandTotal} /> 
+                                </div> 
+                                <div className="flex flex-col gap-4"> 
+                                    <div className="flex justify-between items-end border-b border-white/10 pb-3"> 
+                                        <h3 className="text-[#fa9400] font-bold text-xl tracking-tight">Outsource</h3> 
+                                        <div className="flex items-center gap-4"> 
+                                            <span className="text-gray-500 text-xs font-bold uppercase">Omitted: {summaryViews.compOutsource.totalOmitted}</span> 
+                                            <button onClick={() => handleExportSummaryCSV(summaryViews.compOutsource, "Comp_Outsource_Summary")} className="bg-white/10 text-white px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/20 text-xs font-bold transition-colors">Export CSV</button> 
+                                        </div> 
+                                    </div> 
+                                    <SummaryTable headers={summaryViews.compOutsource.headers} rows={summaryViews.compOutsource.rows} totalRow={summaryViews.compOutsource.grandTotal} /> 
+                                </div> 
+                            </div> 
+                        )} 
+ 
+                        {activeTab === "Roto/Paint Summary" && ( 
+                            <div className="p-6 h-full flex flex-col gap-6 overflow-hidden animate-fadeIn"> 
+                                <div className="flex border-b border-white/10 flex-shrink-0 overflow-x-auto pb-1 gap-2"> 
+                                    {["Roto (All)", "Paint (All)", "Roto (Inhouse)", "Paint (Inhouse)", "Roto (Outsource)", "Paint (Outsource)"].map(sub => ( 
+                                        <div key={sub} onClick={()=>setRotoPaintSubTab(sub)} className={`px-5 py-2 cursor-pointer font-bold whitespace-nowrap rounded-t-lg transition-colors ${rotoPaintSubTab===sub ? 'bg-white/10 text-[#fa9400] border-b-2 border-[#fa9400]' : 'text-gray-500 hover:text-gray-300'}`}> 
+                                            {sub} 
+                                        </div> 
+                                    ))} 
+                                </div> 
+                                <div className="flex-1 overflow-auto custom-scrollbar"> 
+                                    {(() => { 
+                                        const mapKey = { "Roto (All)": "rotoAll", "Paint (All)": "paintAll", "Roto (Inhouse)": "rotoInhouse", "Paint (Inhouse)": "paintInhouse", "Roto (Outsource)": "rotoOutsource", "Paint (Outsource)": "paintOutsource" }[rotoPaintSubTab]; 
+                                        const data = summaryViews[mapKey]; 
+                                        if (!data) return <div className="text-gray-500">No Data</div>; 
+                                        return ( 
+                                            <div className="flex flex-col gap-4"> 
+                                                <div className="flex justify-end items-center gap-4 mb-2"> 
+                                                    <span className="text-gray-500 text-xs font-bold uppercase">Omitted: {data.totalOmitted}</span> 
+                                                    <button onClick={() => handleExportSummaryCSV(data, mapKey)} className="bg-white/10 text-white px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/20 text-xs font-bold transition-colors">Export CSV</button> 
+                                                </div> 
+                                                <SummaryTable headers={data.headers} rows={data.rows} totalRow={data.grandTotal} /> 
+                                            </div> 
+                                        ); 
+                                    })()} 
+                                </div> 
+                            </div> 
+                        )} 
+                    </div> 
+ 
+                    {contextMenu && ( 
+                        <div className="context-menu" style={{top: contextMenu.y, left: contextMenu.x}}> 
+                            <div className="context-item" onClick={()=>setHistoryShot(contextMenu.shot)}><span>🕒</span> Shot History</div> 
+                            <div className="context-item" onClick={()=>navigator.clipboard.writeText(contextMenu.shot.shot_name)}><span>📋</span> Copy Shot Name</div> 
+                        </div> 
+                    )} 
+ 
+                    {historyShot && ( 
+                        <div className="modal-overlay" onClick={() => setHistoryShot(null)}> 
+                            <div className="modal-box" onClick={e => e.stopPropagation()}> 
+                                <div className="modal-header"> 
+                                    <h3 className="font-bold text-[#fa9400] text-lg">Timeline for {historyShot.shot_name}</h3> 
+                                    <button onClick={() => setHistoryShot(null)} className="text-gray-400 hover:text-white transition-colors">✕</button> 
+                                </div> 
+                                <div className="modal-body custom-scrollbar bg-black/40"> 
+                                    {historyLoading ? <div className="p-10 text-center text-gray-400 animate-pulse">Loading history...</div> : ( 
+                                        <table className="w-full text-xs border-collapse"> 
+                                            <thead><tr className="bg-white/10 text-gray-300"><th className="p-3 text-left">Date</th><th className="p-3 text-left">Time</th><th className="p-3 text-left">Status</th><th className="p-3 text-left">Event</th></tr></thead> 
+                                            <tbody> 
+                                                {historyLogs.map((l,i)=>( 
+                                                    <tr key={i} className={`border-b border-white/5 ${l.rowClass === 'row-bg-Approved' ? 'bg-green-900/30' : l.rowClass === 'row-bg-KBK' ? 'bg-red-900/30' : l.rowClass === 'row-bg-AWFB' ? 'bg-blue-900/30' : 'hover:bg-white/5'}`}> 
+                                                        <td className="p-3 text-gray-400">{l.displayDate}</td><td className="p-3 text-gray-500">{l.displayTime}</td> 
+                                                        <td className="p-3 font-bold text-white">{l.status}</td><td className="p-3 text-gray-300">{l.context}</td> 
+                                                    </tr> 
+                                                ))} 
+                                            </tbody> 
+                                        </table> 
+                                    )} 
+                                </div> 
+                                <div className="p-4 bg-[#1a1a1a] border-t border-white/10 flex justify-end gap-3 rounded-b-lg"> 
+                                    <button onClick={handleExportHistoryCSV} className="px-4 py-2 bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-white hover:bg-white/20 transition-colors">Export CSV</button> 
+                                    <button onClick={() => setHistoryShot(null)} className="px-4 py-2 bg-transparent border border-white/10 rounded-lg text-xs font-bold text-gray-400 hover:text-white hover:border-white/30 transition-colors">Close</button> 
+                                </div> 
+                            </div> 
+                        </div> 
+                    )} 
+                </div> 
+            ); 
+        } 
+ 
+        // 3. ROOT RENDER 
+        function App() { 
+            const [user, setUser] = React.useState(null); 
+            React.useEffect(() => auth.onAuthStateChanged(setUser), []); 
+            if (!user) return <Login />; 
+            return <ShotPilotApp user={user} />; 
+        } 
+ 
+        const root = ReactDOM.createRoot(document.getElementById('root')); 
+        root.render(React.createElement(App)); 
+    </script> 
+</body> 
+</html>
